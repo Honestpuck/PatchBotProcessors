@@ -124,11 +124,10 @@ class JPCImporter(Processor):
         self.logger.debug("Uploaded and got ID: %s", packid)
 
         # build the package record XML
-        today = datetime.datetime.now().strftime("%d-%b-%G")
+        today = datetime.datetime.now().strftime("(%Y-%m-%d)")
         data = "<package><id>{}</id>".format(packid)
         data += "<category>Applications</category>"
-        data += "<notes>Built by Autopkg. "
-        data += "Uploaded {}</notes></package>".format(today)
+        data += "<notes>Built by Autopkg. {}".format(today)
 
         # we use requests for all the other API calls as it codes nicer
         # update the package details

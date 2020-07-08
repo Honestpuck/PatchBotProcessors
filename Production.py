@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 #
-# Production v2.0
+# Production v2.1
 # Tony Williams 2020-05-24
 #
 # ARW 2020-06-25 Code clean up
+# ARW 2020-07-07 Straighten logic for autopkg report
 
 """See docstring for Production class"""
 
@@ -54,7 +55,7 @@ class Production(Processor):
     pkg = Package()
 
     def load_prefs(self):
-        """ load the preferences form file """
+        """ load the preferences from file """
         # Which pref format to use, autopkg or jss_importer
         autopkg = False
         if autopkg:
@@ -77,7 +78,6 @@ class Production(Processor):
         LOGFILE = "/usr/local/var/log/%s.log" % APPNAME
 
         self.logger = logging.getLogger(APPNAME)
-        self.logger.setLevel(LOGLEVEL)
         # we may be the second and subsequent iterations of JPCImporter
         # and already have a handler.
         if len(self.logger.handlers):
@@ -85,7 +85,14 @@ class Production(Processor):
         ch = logging.handlers.TimedRotatingFileHandler(
             LOGFILE, when="D", interval=1, backupCount=7
         )
+        ch.setFormatter(
+            logging.Formatter(
+                "%(asctime)s %(levelname)s %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+            )
+        )
         self.logger.addHandler(ch)
+        self.logger.setLevel(LOGLEVEL)
 
     def lookup(self):
         """look up test policy to find package name, id and version """
@@ -208,7 +215,6 @@ class Production(Processor):
             )
         root = ET.fromstring(ret.text)
         pol_list = root.findall("patch_policy")
-        pol_id = 0
         for pol in pol_list:
             if "Stable" in pol.findtext("name"):
                 pol_id = pol.findtext("id")
@@ -240,7 +246,6 @@ class Production(Processor):
                         "Stable patch update failed with code: %s"
                         % ret.status_code
                     )
-                pol_id = ET.fromstring(ret.text).findtext("id")
             if "Test" in pol.findtext("name"):
                 pol_id = pol.findtext("id")
                 # now grab that policy
@@ -264,33 +269,30 @@ class Production(Processor):
                         "Test patch update failed with code: %s"
                         % ret.status_code
                     )
-        return pol_id
 
     def main(self):
         """Do it!"""
         self.setup_logging()
         (self.base, self.auth) = self.load_prefs()
         # clear any pre-exising summary result
-        if "Production_summary_result" in self.env:
+        if "production_summary_result" in self.env:
             del self.env["production_summary_result"]
         self.pkg.title = self.env.get("package")
         if self.env.get("patch"):
             self.pkg.patch = self.env.get("patch")
         else:
             self.pkg.patch = self.pkg.title
+        self.logger.debug("Set self.pkg.patch: %s", self.pkg.patch)
         self.logger.debug("About to call lookup for %s", self.pkg.title)
         self.lookup()
         self.production()
-        if self.pkg.patch == "None":
-            pol = "00"
-        else:
-            pol = self.patch()
-        if pol != "":
-            self.env["production_summary_result"] = {
-                "summary_text": "The following updates were productionized:",
-                "report_fields": ["title", "version"],
-                "data": {"title": self.pkg.title, "version": self.pkg.version},
-            }
+        self.logger.debug("Post production self.pkg.patch: %s", self.pkg.patch)
+        self.patch()
+        self.env["production_summary_result"] = {
+            "summary_text": "The following updates were productionized:",
+            "report_fields": ["title", "version"],
+            "data": {"title": self.pkg.title, "version": self.pkg.version},
+        }
 
 
 if __name__ == "__main__":
