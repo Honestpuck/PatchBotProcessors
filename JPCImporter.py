@@ -113,8 +113,8 @@ class JPCImporter(Processor):
         command += ["--header", "FILE_NAME: {}".format(pkg)]
         command += ["--upload-file", pkg_path]
         self.logger.debug("About to curl: %s", pkg)
-        self.logger.debug("Auth: %s", curl_auth)
-        self.logger.debug("pkg_path: %s", curl_auth)
+        # self.logger.debug("Auth: %s", curl_auth)
+        self.logger.debug("pkg_path: %s", pkg_path)
         self.logger.debug("command: %s", command)
         ret = subprocess.check_output(command)
         self.logger.debug("Done - ret: %s", ret)
@@ -127,7 +127,7 @@ class JPCImporter(Processor):
         today = datetime.datetime.now().strftime("(%Y-%m-%d)")
         data = "<package><id>{}</id>".format(packid)
         data += "<category>Applications</category>"
-        data += "<notes>Built by Autopkg. {}".format(today)
+        data += "<notes>Built by Autopkg. {}</notes></package>".format(today)
 
         # we use requests for all the other API calls as it codes nicer
         # update the package details
@@ -143,11 +143,13 @@ class JPCImporter(Processor):
             ret = requests.put(url, auth=auth, headers=hdrs, data=data)
             if ret.status_code == 201:
                 break
-            if count > 5:
+            self.logger.debug("Attempt failed with code: %s" % ret.status_code)
+            self.logger.debug("URL: %s" % url)
+            if count > 10:
                 raise ProcessorError(
                     "Package update failed with code: %s" % ret.status_code
                 )
-            sleep(15)
+            sleep(20)
 
         # now for the test policy update
         policy_name = "TEST-{}".format(title)

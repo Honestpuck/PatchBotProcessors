@@ -48,7 +48,7 @@ class Production(Processor):
     }
 
     output_variables = {
-        "Production_summary_result": {"description": "Summary of action"}
+        "production_summary_result": {"description": "Summary of action"}
     }
 
     # a package
@@ -276,7 +276,8 @@ class Production(Processor):
         (self.base, self.auth) = self.load_prefs()
         # clear any pre-exising summary result
         if "production_summary_result" in self.env:
-            del self.env["production_summary_result"]
+            self.logger.debug("Clearing prev summary")
+            del self.env["prod_summary_result"]
         self.pkg.title = self.env.get("package")
         if self.env.get("patch"):
             self.pkg.patch = self.env.get("patch")
@@ -288,11 +289,15 @@ class Production(Processor):
         self.production()
         self.logger.debug("Post production self.pkg.patch: %s", self.pkg.patch)
         self.patch()
+        self.logger.debug("Done patch")
         self.env["production_summary_result"] = {
             "summary_text": "The following updates were productionized:",
             "report_fields": ["title", "version"],
-            "data": {"title": self.pkg.title, "version": self.pkg.version},
+            "data": {"title": self.pkg.title, "version": self.pkg.version,},
         }
+        self.logger.debug(
+            "Summary done: %s" % self.env["production_summary_result"]
+        )
 
 
 if __name__ == "__main__":
