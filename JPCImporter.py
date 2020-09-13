@@ -8,6 +8,7 @@
 # ARW 2020-03-12 Version 2 with changes for new workflow
 # ARW 2020-06-09 Some changes to log levels and cleaning up code
 # ARW 2020-06-24 Final tidy before publication
+# ARW 2020-09-13 Modified package category handling (see issues #3 & #4)
 
 """See docstring for JPCImporter class"""
 
@@ -26,6 +27,9 @@ from autopkglib import Processor, ProcessorError
 APPNAME = "JPCImporter"
 LOGLEVEL = logging.DEBUG
 LOGFILE = "/usr/local/var/log/%s.log" % APPNAME
+
+# default category for packages
+CATEGORY = 'Applications'
 
 __all__ = [APPNAME]
 
@@ -126,7 +130,7 @@ class JPCImporter(Processor):
         # build the package record XML
         today = datetime.datetime.now().strftime("(%Y-%m-%d)")
         data = "<package><id>{}</id>".format(packid)
-        data += "<category>Applications</category>"
+        data += "<category>{}</category>".format(CATEGORY)
         data += "<notes>Built by Autopkg. {}</notes></package>".format(today)
 
         # we use requests for all the other API calls as it codes nicer
