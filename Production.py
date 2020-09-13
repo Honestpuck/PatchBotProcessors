@@ -27,9 +27,10 @@ __all__ = [APPNAME]
 class Package:
     """A package. This exists merely to carry the variables"""
 
-    title = ""  # the application title matching the test policy
+    # the application title from package name matching the test policy
+    package = ""
     patch = ""  # name of the patch definition
-    name = ""  # full name of the package '<title>-<version>.pkg'
+    name = ""  # full name of the package '<package>-<version>.pkg'
     version = ""  # the version of our package
     idn = ""  # id of the package in our JP server
 
@@ -97,7 +98,7 @@ class Production(Processor):
     def lookup(self):
         """look up test policy to find package name, id and version """
         self.logger.debug("Starting")
-        url = self.base + "/policies/name/Test-" + self.pkg.title
+        url = self.base + "/policies/name/Test-" + self.pkg.package
         pack_base = "package_configuration/packages/package"
         self.logger.debug("About to request %s", url)
         ret = requests.get(url, auth=self.auth)
@@ -116,7 +117,7 @@ class Production(Processor):
 
     def production(self):
         """change the package in the production policy"""
-        url = self.base + "/policies/name/Install " + self.pkg.title
+        url = self.base + "/policies/name/Install " + self.pkg.package
         pack_base = "package_configuration/packages/package"
         self.logger.debug("About to request %s", url)
         ret = requests.get(url, auth=self.auth)
@@ -161,7 +162,7 @@ class Production(Processor):
                 break
         if pst_id == 0:
             raise ProcessorError(
-                "Patch list did not contain title: {}".format(self.pkg.title)
+                "Patch list did not contain title: {}".format(self.pkg.package)
             )
         # get patch list for our title
         url = self.base + "/patchsoftwaretitles/id/" + str(pst_id)
@@ -234,7 +235,7 @@ class Production(Processor):
                 root.find("general/release_date").text = ""
                 # create a description with date
                 now = datetime.datetime.now().strftime(" (%Y-%m-%d)")
-                desc = "Update " + self.pkg.title + now
+                desc = "Update " + self.pkg.package + now
                 root.find(
                     "user_interaction/self_service_description"
                 ).text = desc
@@ -278,13 +279,11 @@ class Production(Processor):
         if "production_summary_result" in self.env:
             self.logger.debug("Clearing prev summary")
             del self.env["prod_summary_result"]
-        self.pkg.title = self.env.get("package")
-        if self.env.get("patch"):
+        self.pkg.package = self.env.get("package")
+        try:
             self.pkg.patch = self.env.get("patch")
-        else:
-            self.pkg.patch = self.pkg.title
-        self.logger.debug("Set self.pkg.patch: %s", self.pkg.patch)
-        self.logger.debug("About to call lookup for %s", self.pkg.title)
+        except KeyError:
+            self.pkg.patch = self.pkg.package
         self.lookup()
         self.production()
         self.logger.debug("Post production self.pkg.patch: %s", self.pkg.patch)
@@ -292,8 +291,8 @@ class Production(Processor):
         self.logger.debug("Done patch")
         self.env["production_summary_result"] = {
             "summary_text": "The following updates were productionized:",
-            "report_fields": ["title", "version"],
-            "data": {"title": self.pkg.title, "version": self.pkg.version,},
+            "report_fields": ["package", "version"],
+            "data": {"package": self.pkg.package, "version": self.pkg.version,},
         }
         self.logger.debug(
             "Summary done: %s" % self.env["production_summary_result"]

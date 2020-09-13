@@ -8,7 +8,6 @@
 # ARW 2020-03-12 Version 2 with changes for new workflow
 # ARW 2020-06-09 Some changes to log levels and cleaning up code
 # ARW 2020-06-24 Final tidy before publication
-# ARW 2020-09-13 Modified package category handling (see issues #3 & #4)
 
 """See docstring for JPCImporter class"""
 
@@ -28,9 +27,6 @@ APPNAME = "JPCImporter"
 LOGLEVEL = logging.DEBUG
 LOGFILE = "/usr/local/var/log/%s.log" % APPNAME
 
-# default category for packages
-CATEGORY = 'Applications'
-
 __all__ = [APPNAME]
 
 
@@ -41,12 +37,13 @@ class JPCImporter(Processor):
 
     input_variables = {
         "pkg_path": {
-            "required": True,
+            "required": False,
             "description": "Path to the package to be imported into Jamf Pro ",
         },
     }
     output_variables = {
-        "jpc_importer_summary_result": {"description": "Summary of action"}
+        "pkg_path": {"description": "The created package.",},
+        "jpc_importer_summary_result": {"description": "Summary of action"},
     }
 
     def setup_logging(self):
@@ -130,7 +127,7 @@ class JPCImporter(Processor):
         # build the package record XML
         today = datetime.datetime.now().strftime("(%Y-%m-%d)")
         data = "<package><id>{}</id>".format(packid)
-        data += "<category>{}</category>".format(CATEGORY)
+        data += "<category>Applications</category>"
         data += "<notes>Built by Autopkg. {}</notes></package>".format(today)
 
         # we use requests for all the other API calls as it codes nicer

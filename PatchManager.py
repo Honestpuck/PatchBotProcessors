@@ -26,9 +26,10 @@ __all__ = [APPNAME]
 class Package:
     """A package. This exists merely to carry the variables"""
 
-    title = ""  # the application title matching the test policy
+    # the application part of the package name matching the test policy
+    package = ""
     patch = ""  # name of the patch definition
-    name = ""  # full name of the package '<title>-<version>.pkg'
+    name = ""  # full name of the package '<package>-<version>.pkg'
     version = ""  # the version of our package
     idn = ""  # id of the package in our JP server
 
@@ -40,8 +41,8 @@ class PatchManager(Processor):
     description = __doc__
 
     input_variables = {
-        "title": {"required": True, "description": "Application title"},
-        "patch": {"required": True, "description": "Patch name"},
+        "package": {"required": True, "description": "Application part of package name"},
+        "patch": {"required": False, "description": "Patch name"},
     }
     output_variables = {
         "patch_manager_summary_result": {"description": "Summary of action"}
@@ -73,7 +74,7 @@ class PatchManager(Processor):
     def policy(self):
         """Download the TEST policy for the app and return version string"""
         self.logger.warning(
-            "******** Starting policy %s *******" % self.pkg.title
+            "******** Starting policy %s *******" % self.pkg.package
         )
         # Which pref format to use, autopkg or jss_importer
         autopkg = False
@@ -91,7 +92,7 @@ class PatchManager(Processor):
             prefs = plistlib.load(fp)
             self.base = prefs["url"] + "/JSSResource/"
             self.auth = (prefs["user"], prefs["password"])
-        policy_name = "TEST-{}".format(self.pkg.title)
+        policy_name = "TEST-{}".format(self.pkg.package)
         url = self.base + "policies/name/{}".format(policy_name)
         self.logger.debug(
             "About to make request URL %s, auth %s" % (url, self.auth)
@@ -242,7 +243,7 @@ class PatchManager(Processor):
                 root.find("general/enabled").text = "true"
                 # create a description with date
                 now = datetime.datetime.now().strftime(" (%Y-%m-%d)")
-                desc = "Update " + self.pkg.title + now
+                desc = "Update " + self.pkg.package + now
                 root.find(
                     "user_interaction/self_service_description"
                 ).text = desc
@@ -267,24 +268,27 @@ class PatchManager(Processor):
         if "patch_manager_summary_result" in self.env:
             del self.env["patch_manager_summary_result"]
         self.logger.debug("About to update package")
-        self.pkg.patch = self.env.get("patch")
-        self.pkg.title = self.env.get("title")
+        self.pkg.package = self.env.get("package")
+        try:
+            self.pkg.patch = self.env.get("patch")
+        except KeyError:
+            self.pkg.patch = self.pkg.package
 
         self.pkg.version = self.policy()
         pol_id = self.patch()
         if pol_id != 0:
             self.env["patch_manager_summary_result"] = {
                 "summary_text": "The following packages were sent to test:",
-                "report_fields": ["patch_id", "title", "version"],
+                "report_fields": ["patch_id", "package", "version"],
                 "data": {
                     "patch_id": pol_id,
-                    "title": self.pkg.title,
+                    "package": self.pkg.package,
                     "version": self.pkg.version,
                 },
             }
             print(
                 "%s version %s sent to test"
-                % (self.pkg.title, self.pkg.version)
+                % (self.pkg.package, self.pkg.version)
             )
         else:
             self.logger.debug("Zero policy id %s" % self.pkg.patch)
