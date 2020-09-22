@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 #
-# Production v2.1
+# Production v2.1.1
 # Tony Williams 2020-05-24
+# David Elkin-Bram 2020-09-21
 #
 # ARW 2020-06-25 Code clean up
 # ARW 2020-07-07 Straighten logic for autopkg report
+# MVP-3 2020-09-21 Incorporate Move.py date logic, adding new recipe variable
 
 """See docstring for Production class"""
 
@@ -33,6 +35,7 @@ class Package:
     name = ""  # full name of the package '<package>-<version>.pkg'
     version = ""  # the version of our package
     idn = ""  # id of the package in our JP server
+    days_to_production = ""  # days before move to production
 
 
 class Production(Processor):
@@ -46,6 +49,7 @@ class Production(Processor):
     input_variables = {
         "package": {"required": True, "description": "Package name"},
         "patch": {"required": False, "description": "Patch name"},
+        "days_to_production": {"required": False, "description": "Days before move to production"},
     }
 
     output_variables = {
@@ -95,9 +99,118 @@ class Production(Processor):
         self.logger.addHandler(ch)
         self.logger.setLevel(LOGLEVEL)
 
+    ## code here could be optimized
+    ## somewhat redundant lookups happening in later routines
+    def time_to_move(self):
+        """test whether or not to move to production"""
+        self.logger.debug("Move Check")
+        if int(self.pkg.days_to_production) == 0:
+            self.logger.debug("Moving Now")
+            return True
+
+        # we will parse the patch policy as in PatchManager.py:patch()
+        # download the list of titles
+        url = self.base + "/patchsoftwaretitles"
+        self.logger.debug("About to request PST list %s", url)
+        ret = requests.get(url, auth=self.auth)
+        if ret.status_code != 200:
+            raise ProcessorError(
+                "Patch list download failed: {} : {}".format(
+                    ret.status_code, url
+                )
+            )
+        self.logger.debug("Got PST list")
+        root = ET.fromstring(ret.text)
+        # loop through 'patchsoftwaretitles' list to find our title
+        ident = 0
+        for ps_title in root.findall("patch_software_title"):
+            if ps_title.findtext("name") == self.pkg.patch:
+                ident = ps_title.findtext("id")
+                self.logger.debug("PST ID found")
+                break
+        if ident == 0:
+            raise ProcessorError(
+                "Patch list did not contain title: {}".format(self.pkg.patch)
+            )
+        
+        # first get the list of patch policies for our software title
+        url = self.base + "/patchpolicies/softwaretitleconfig/id/" + str(ident)
+        self.logger.debug("About to request patch list: %s" % url)
+        ret = requests.get(url, auth=self.auth)
+        if ret.status_code != 200:
+            ## self.pkg.name -> self.pkg.package
+            raise ProcessorError(
+                "Patch policy list download failed: {} : {}".format(
+                    str(ident), self.pkg.package
+                )
+            )
+        root = ET.fromstring(ret.text)
+        # loop through policies for the Test one
+        pol_list = root.findall("patch_policy")
+        ## self.pkg.name -> self.pkg.package
+        self.logger.debug("Got the PP list and name is: %s" % self.pkg.package)
+        for pol in pol_list:
+            # now grab policy
+            self.logger.debug(
+                "examining patch policy %s" % pol.findtext("name")
+            )
+            if "Test" in pol.findtext("name"):
+                pol_id = pol.findtext("id")
+                url = self.base + "/patchpolicies/id/" + str(pol_id)
+                self.logger.debug("About to request PP by ID: %s" % url)
+                ret = requests.get(url, auth=self.auth)
+                if ret.status_code != 200:
+                    raise ProcessorError(
+                        "Patch policy download failed: {} : {}".format(
+                            str(pol_id), self.pkg.name
+                        )
+                    )
+                # read the patch policy
+                root = ET.fromstring(ret.text)
+                self.logger.debug("TEST root: %s" % ret.text)
+                
+                now = datetime.datetime.now()
+                self.logger.debug("TEST now: %s" % now)
+                #now = datetime.datetime.now().strftime(" (%Y-%m-%d)")
+                
+                description = root.find(
+                    "user_interaction/self_service_description"
+                ).text.split()
+                self.logger.debug("TEST description: %s" % description)
+                
+                # we may have found a patch policy with no proper description yet
+                # unclear why we're testing the length not equal to 3
+                if len(description) != 3:
+                    self.logger.debug("Date not understood, skipping.")
+                    return False
+                
+                title, datestr = description[1:]
+                self.logger.debug("TEST title: %s" % title)
+                self.logger.debug("TEST datestr: %s" % datestr)
+                
+                date = datetime.datetime.strptime(datestr, "(%Y-%m-%d)")
+                delta = now - date
+                self.logger.debug(
+                    "Found delta to check: %s in %s" % (delta.days, title)
+                )
+                if delta.days >= int(self.pkg.days_to_production):
+                    self.logger.debug(
+                        "%s Days delta >= %s Days before move, moving now."
+                        % (delta.days, self.pkg.days_to_production)
+                    )
+                    return True
+                else:
+                    self.logger.debug(
+                        "%s Days delta < %s Days before move, skipping move to production."
+                        % (delta.days, self.pkg.days_to_production)
+                    )
+                    return False
+                    
+        raise ProcessorError("Test patch policy missing")
+        
     def lookup(self):
         """look up test policy to find package name, id and version """
-        self.logger.debug("Starting")
+        self.logger.debug("Lookup")
         url = self.base + "/policies/name/Test-" + self.pkg.package
         pack_base = "package_configuration/packages/package"
         self.logger.debug("About to request %s", url)
@@ -274,6 +387,8 @@ class Production(Processor):
     def main(self):
         """Do it!"""
         self.setup_logging()
+        self.logger.debug("Starting")
+        
         (self.base, self.auth) = self.load_prefs()
         # clear any pre-exising summary result
         if "production_summary_result" in self.env:
@@ -284,6 +399,18 @@ class Production(Processor):
             self.pkg.patch = self.env.get("patch")
         except KeyError:
             self.pkg.patch = self.pkg.package
+        self.logger.debug("Set self.pkg.patch: %s", self.pkg.patch)
+        
+        if self.env.get("days_to_production"):
+            self.pkg.days_to_production = self.env.get("days_to_production")
+        else:
+            self.pkg.days_to_production = "0"
+        self.logger.debug("Set self.pkg.days_to_production: %s", self.pkg.days_to_production)
+        
+        if not self.time_to_move():
+            self.logger.debug("Time to move = False :: ENDING")
+            return
+        
         self.lookup()
         self.production()
         self.logger.debug("Post production self.pkg.patch: %s", self.pkg.patch)
