@@ -49,7 +49,9 @@ class Production(Processor):
     input_variables = {
         "package": {"required": True, "description": "Package name"},
         "patch": {"required": False, "description": "Patch name"},
-        "days_to_production": {"required": False, "description": "Days before move to production"},
+        "days_to_production": {
+            "required": False,
+            "description": "Days before move to production"},
     }
 
     output_variables = {
@@ -99,13 +101,20 @@ class Production(Processor):
         self.logger.addHandler(ch)
         self.logger.setLevel(LOGLEVEL)
 
+
+    def autopkg_msg(self, the_msg):
+        """Defines a simple prefixed string to stdout for autopkg"""
+        print(APPNAME + ': ' + the_msg)
+
+
     ## code here could be optimized
     ## somewhat redundant lookups happening in later routines
     def time_to_move(self):
         """test whether or not to move to production"""
-        self.logger.debug("Move Check")
-        if int(self.pkg.days_to_production) == 0:
+        self.logger.debug("Time To Move?")
+        if self.pkg.days_to_production == "0":
             self.logger.debug("Moving Now")
+            self.autopkg_msg("Moving Now")
             return True
 
         # we will parse the patch policy as in PatchManager.py:patch()
@@ -138,7 +147,6 @@ class Production(Processor):
         self.logger.debug("About to request patch list: %s" % url)
         ret = requests.get(url, auth=self.auth)
         if ret.status_code != 200:
-            ## self.pkg.name -> self.pkg.package
             raise ProcessorError(
                 "Patch policy list download failed: {} : {}".format(
                     str(ident), self.pkg.package
@@ -147,7 +155,6 @@ class Production(Processor):
         root = ET.fromstring(ret.text)
         # loop through policies for the Test one
         pol_list = root.findall("patch_policy")
-        ## self.pkg.name -> self.pkg.package
         self.logger.debug("Got the PP list and name is: %s" % self.pkg.package)
         for pol in pol_list:
             # now grab policy
@@ -167,26 +174,26 @@ class Production(Processor):
                     )
                 # read the patch policy
                 root = ET.fromstring(ret.text)
-                self.logger.debug("TEST root: %s" % ret.text)
                 
+                # now as date object
                 now = datetime.datetime.now()
-                self.logger.debug("TEST now: %s" % now)
-                #now = datetime.datetime.now().strftime(" (%Y-%m-%d)")
                 
+                # parse expected description into tuple:
+                # ( "Update", pkg.package, "(date formatted string)" )
                 description = root.find(
                     "user_interaction/self_service_description"
                 ).text.split()
-                self.logger.debug("TEST description: %s" % description)
+                self.logger.debug("split() description: %s" % description)
                 
                 # we may have found a patch policy with no proper description yet
-                # unclear why we're testing the length not equal to 3
+                # 3 part tuple expected
                 if len(description) != 3:
-                    self.logger.debug("Date not understood, skipping.")
+                    self.logger.debug("Date not understood, skipping")
+                    self.autopkg_msg("Date not understood, skipping")
                     return False
                 
+                # tuple item 2 and item 3 copied into title and datestr
                 title, datestr = description[1:]
-                self.logger.debug("TEST title: %s" % title)
-                self.logger.debug("TEST datestr: %s" % datestr)
                 
                 date = datetime.datetime.strptime(datestr, "(%Y-%m-%d)")
                 delta = now - date
@@ -195,22 +202,34 @@ class Production(Processor):
                 )
                 if delta.days >= int(self.pkg.days_to_production):
                     self.logger.debug(
-                        "%s Days delta >= %s Days before move, moving now."
+                        "%s Days delta >= %s Days before move, moving now"
+                        % (delta.days, self.pkg.days_to_production)
+                    )
+                    self.autopkg_msg(
+                        "%s Days delta >= %s Days before move, moving now"
                         % (delta.days, self.pkg.days_to_production)
                     )
                     return True
                 else:
                     self.logger.debug(
-                        "%s Days delta < %s Days before move, skipping move to production."
+                        "%s Days delta < %s Days before move, skipping move to production"
+                        % (delta.days, self.pkg.days_to_production)
+                    )
+                    self.autopkg_msg(
+                        "%s Days delta < %s Days before move, skipping move to production"
                         % (delta.days, self.pkg.days_to_production)
                     )
                     return False
-                    
         raise ProcessorError("Test patch policy missing")
         
+
     def lookup(self):
         """look up test policy to find package name, id and version """
         self.logger.debug("Lookup")
+        self.autopkg_msg(
+            "Getting package info from policy Test-%s"
+            % self.pkg.package
+        )
         url = self.base + "/policies/name/Test-" + self.pkg.package
         pack_base = "package_configuration/packages/package"
         self.logger.debug("About to request %s", url)
@@ -227,9 +246,12 @@ class Production(Processor):
         self.pkg.idn = policy.findtext(pack_base + "/id")
         self.pkg.name = policy.findtext(pack_base + "/name")
         self.pkg.version = self.pkg.name.split("-", 1)[1][:-4]
+        self.autopkg_msg("Package file in policy Test-%s is %s (id: %s)"
+            % (self.pkg.package, self.pkg.name, self.pkg.idn))
 
     def production(self):
         """change the package in the production policy"""
+        self.autopkg_msg("Updating policy: Install %s" % self.pkg.package)
         url = self.base + "/policies/name/Install " + self.pkg.package
         pack_base = "package_configuration/packages/package"
         self.logger.debug("About to request %s", url)
@@ -255,6 +277,7 @@ class Production(Processor):
 
     def patch(self):
         """now we start on the patch definition"""
+        self.autopkg_msg("Updating patch defition with version %s" % self.pkg.version)
         # download the list of titles
         url = self.base + "/patchsoftwaretitles"
         ret = requests.get(url, auth=self.auth)
@@ -352,8 +375,20 @@ class Production(Processor):
                 root.find(
                     "user_interaction/self_service_description"
                 ).text = desc
+                # manage issue: no self_service_icon assigned
+                # if element is None:
+                #     create ID SubElement, value = -1, to get the record to be accepted
+                if root.find("user_interaction/self_service_icon/id") is None:
+                    icon_rec = root.find("user_interaction/self_service_icon")
+                    add = ET.SubElement(icon_rec, "id")
+                    add.text = "-1"
+
                 data = ET.tostring(root)
                 self.logger.debug("About to update Stable PP: %s", url)
+                self.autopkg_msg(
+                    "Updating patch policy: %s Stable"
+                    % self.pkg.patch
+                )
                 ret = requests.put(url, auth=self.auth, data=data)
                 if ret.status_code != 201:
                     raise ProcessorError(
@@ -375,8 +410,17 @@ class Production(Processor):
                 # now disable the patch policy
                 root = ET.fromstring(ret.text)
                 root.find("general/enabled").text = "false"
+                # manage issue: no self_service_icon assigned
+                # if element is None:
+                #     create ID SubElement, value = -1, to get the record to be accepted
+                if root.find("user_interaction/self_service_icon/id") is None:
+                    icon_rec = root.find("user_interaction/self_service_icon")
+                    add = ET.SubElement(icon_rec, "id")
+                    add.text = "-1"
+
                 data = ET.tostring(root)
                 self.logger.debug("About to update Test PP: %s", url)
+                self.autopkg_msg("Disabling patch policy: %s Test" % self.pkg.patch)
                 ret = requests.put(url, auth=self.auth, data=data)
                 if ret.status_code != 201:
                     raise ProcessorError(
@@ -388,6 +432,7 @@ class Production(Processor):
         """Do it!"""
         self.setup_logging()
         self.logger.debug("Starting")
+        self.autopkg_msg("Starting")
         
         (self.base, self.auth) = self.load_prefs()
         # clear any pre-exising summary result
@@ -401,12 +446,16 @@ class Production(Processor):
             self.pkg.patch = self.pkg.package
         self.logger.debug("Set self.pkg.patch: %s", self.pkg.patch)
         
+        # try seems to return "None", using if/else for now
+        # do we have argument: days_to_production, if not set it to "0"
         if self.env.get("days_to_production"):
             self.pkg.days_to_production = self.env.get("days_to_production")
         else:
             self.pkg.days_to_production = "0"
         self.logger.debug("Set self.pkg.days_to_production: %s", self.pkg.days_to_production)
+        self.autopkg_msg("Days to production for %s: %s " % (self.pkg.patch, self.pkg.days_to_production))
         
+        # Is it time to move to production?
         if not self.time_to_move():
             self.logger.debug("Time to move = False :: ENDING")
             return
@@ -416,6 +465,7 @@ class Production(Processor):
         self.logger.debug("Post production self.pkg.patch: %s", self.pkg.patch)
         self.patch()
         self.logger.debug("Done patch")
+        self.autopkg_msg("Done")
         self.env["production_summary_result"] = {
             "summary_text": "The following updates were productionized:",
             "report_fields": ["package", "version"],
