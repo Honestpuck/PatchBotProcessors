@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 #
-# JPCImporter v2.1
+# JPCImporter v2.1.1
 #
 # Tony Williams 2019-07-03
+# David Elkin-Bram 2020-09-24
 #
 # ARW 2019-07-18 Many bug fixes
 # ARW 2020-03-12 Version 2 with changes for new workflow
 # ARW 2020-06-09 Some changes to log levels and cleaning up code
 # ARW 2020-06-24 Final tidy before publication
+# MVP-2 2020-09-24 Adjustments for recipe chaining and messaging
 
 """See docstring for JPCImporter class"""
 
@@ -66,6 +68,12 @@ class JPCImporter(Processor):
         )
         self.logger.addHandler(handler)
 
+
+    def autopkg_msg(self, the_msg):
+        """Defines a simple prefixed string to stdout for autopkg"""
+        print(APPNAME + ': ' + the_msg)
+
+
     def load_prefs(self):
         """ load the preferences form file """
         # Which pref format to use, autopkg or jss_importer
@@ -94,6 +102,7 @@ class JPCImporter(Processor):
         base = server + "/JSSResource/"
         pkg = path.basename(pkg_path)
         title = pkg.split("-")[0]
+        self.autopkg_msg("Starting JPC upload for pkg: %s" % pkg)
 
         # check to see if the package already exists
         url = base + "packages/name/{}".format(pkg)
@@ -101,6 +110,7 @@ class JPCImporter(Processor):
         ret = requests.get(url, auth=auth)
         if ret.status_code == 200:
             self.logger.warning("Found existing package: %s", pkg)
+            self.autopkg_msg("Package filename already present in JPC, exiting")
             return 0
 
         # use curl for the file upload as it seems to work nicer than requests
@@ -123,6 +133,7 @@ class JPCImporter(Processor):
         if packid == "":
             raise ProcessorError("curl failed for url :{}".format(curl_url))
         self.logger.debug("Uploaded and got ID: %s", packid)
+        self.autopkg_msg("Upload complete, returned pkg ID: %s" % packid)
 
         # build the package record XML
         today = datetime.datetime.now().strftime("(%Y-%m-%d)")
@@ -154,12 +165,17 @@ class JPCImporter(Processor):
 
         # now for the test policy update
         policy_name = "TEST-{}".format(title)
+        self.autopkg_msg("Updating Policy: %s" % policy_name)
         url = base + "policies/name/{}".format(policy_name)
         ret = requests.get(url, auth=auth)
         if ret.status_code != 200:
-            raise ProcessorError(
+            # object creation target
+            # exit gracefully to allow chained processors to continue
+            self.logger.debug(
                 "Test Policy %s not found: %s" % (url, ret.status_code)
             )
+            self.autopkg_msg("Policy not found, exiting")
+            return 0
         self.logger.warning("Test policy found")
         root = ET.fromstring(ret.text)
         self.logger.debug("about to set package details")
@@ -178,6 +194,7 @@ class JPCImporter(Processor):
         pol_id = ET.fromstring(ret.text).findtext("id")
         self.logger.debug("got pol_id: %s", pol_id)
         self.logger.info("Done Package: %s Test Policy: %s", pkg, pol_id)
+        self.autopkg_msg("%s policy updated with pkg %s, set to disabled" % (policy_name, pkg))
         return pol_id
 
     def main(self):

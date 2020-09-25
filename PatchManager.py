@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 #
-# PatchManager v2.0
+# PatchManager v2.0.1
 #
 # Tony Williams 2020-03-10
+# David Elkin-Bram 2020-09-24
 #
 # ARW 2020-06-22 Major code clean and refactor
+# MVP-2 2020-09-24 Adjustments for recipe chaining and messaging
 
 """See docstring for PatchManager class"""
 
@@ -71,6 +73,12 @@ class PatchManager(Processor):
         self.logger.addHandler(ch)
         self.logger.setLevel(LOGLEVEL)
 
+
+    def autopkg_msg(self, the_msg):
+        """Defines a simple prefixed string to stdout for autopkg"""
+        print(APPNAME + ': ' + the_msg)
+
+
     def policy(self):
         """Download the TEST policy for the app and return version string"""
         self.logger.warning(
@@ -93,6 +101,7 @@ class PatchManager(Processor):
             self.base = prefs["url"] + "/JSSResource/"
             self.auth = (prefs["user"], prefs["password"])
         policy_name = "TEST-{}".format(self.pkg.package)
+        self.autopkg_msg("Geting version from policy: %s" % policy_name)
         url = self.base + "policies/name/{}".format(policy_name)
         self.logger.debug(
             "About to make request URL %s, auth %s" % (url, self.auth)
@@ -103,10 +112,12 @@ class PatchManager(Processor):
                 "TEST Policy %s not found error: %s"
                 % (policy_name, ret.status_code)
             )
-            raise ProcessorError(
+            self.logger.debug(
                 "Policy get for: %s failed with code: %s"
                 % (url, ret.status_code)
             )
+            self.autopkg_msg("Policy not found, exiting")
+            exit()
         self.logger.debug("TEST policy found")
         root = ET.fromstring(ret.text)
         self.pkg.idn = root.find(
@@ -115,14 +126,17 @@ class PatchManager(Processor):
         self.pkg.name = root.find(
             "package_configuration/packages/package/name"
         ).text
+        self.pkg.version = self.pkg.name.split("-", 1)[1][:-4]
         self.logger.debug(
-            "Version in TEST Policy %s " % self.pkg.name.split("-", 1)[1][:-4]
+            "Version in TEST Policy %s " % self.pkg.version
         )
         # return the version number
-        return self.pkg.name.split("-", 1)[1][:-4]
+        self.autopkg_msg("Found version: %s" % self.pkg.version)
+        return self.pkg.version
 
     def patch(self):
         """Now we check for, then update the patch definition"""
+        self.autopkg_msg("Updating Patch Softare Title: %s" % self.pkg.patch)
         # download the list of titles
         url = self.base + "patchsoftwaretitles"
         self.logger.debug("About to request PST list %s", url)
@@ -177,11 +191,17 @@ class PatchManager(Processor):
             # this isn't really an error but we want to know anyway
             # and we need to exit so raising an error is the easiest way to
             # do that feeding info to Teams
-            raise ProcessorError(
+            # exit gracefully to allow chained processors to continue
+            self.logger.debug(
                 "Patch definition version not found: {} : {} : {}".format(
                     str(ident), self.pkg.name, self.pkg.version
                 )
             )
+            self.autopkg_msg(
+                "Patch definition does not have version: %s"
+                % self.pkg.version
+            )
+            exit()
         # update the patch def
         data = ET.tostring(root)
         self.logger.debug("About to put PST: %s" % url)
@@ -207,6 +227,7 @@ class PatchManager(Processor):
         # loop through policies for the Test one
         pol_list = root.findall("patch_policy")
         self.logger.debug("Got the PP list and name is: %s" % self.pkg.name)
+        self.autopkg_msg("Updating patch policy: %s Test" % self.pkg.patch)
         for pol in pol_list:
             # now grab policy
             self.logger.debug(
@@ -273,6 +294,7 @@ class PatchManager(Processor):
             self.pkg.patch = self.env.get("patch")
         except KeyError:
             self.pkg.patch = self.pkg.package
+        self.autopkg_msg("Starting %s" % self.pkg.patch)
 
         self.pkg.version = self.policy()
         pol_id = self.patch()
@@ -286,7 +308,7 @@ class PatchManager(Processor):
                     "version": self.pkg.version,
                 },
             }
-            print(
+            self.autopkg_msg(
                 "%s version %s sent to test"
                 % (self.pkg.package, self.pkg.version)
             )
