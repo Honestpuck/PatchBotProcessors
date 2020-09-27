@@ -35,7 +35,10 @@ class Package:
     name = ""  # full name of the package '<package>-<version>.pkg'
     version = ""  # the version of our package
     idn = ""  # id of the package in our JP server
-    days_to_production = ""  # days before move to production
+    days_until_prod = ""  # days until move to production
+    prod_weekdays = ""  # allowed weekdays for move to production
+    prod_not_before = ""  # earliest time for move to production
+    prod_not_after = ""  # latest time for move to production
 
 
 class Production(Processor):
@@ -49,9 +52,18 @@ class Production(Processor):
     input_variables = {
         "package": {"required": True, "description": "Package name"},
         "patch": {"required": False, "description": "Patch name"},
-        "days_to_production": {
+        "days_until_prod": {
             "required": False,
-            "description": "Days before move to production"},
+            "description": "Days until move to production"},
+        "prod_weekdays": {
+            "required": False,
+            "description": "Allowed weekdays for move to production"},
+        "prod_not_before": {
+            "required": False,
+            "description": "Earliest time for move to production"},
+        "prod_not_after": {
+            "required": False,
+            "description": "Latest time for move to production"},
     }
 
     output_variables = {
@@ -107,17 +119,91 @@ class Production(Processor):
         print(APPNAME + ': ' + the_msg)
 
 
-    ## code here could be optimized
-    ## somewhat redundant lookups happening in later routines
     def time_to_move(self):
         """test whether or not to move to production"""
         self.logger.debug("Time To Move?")
-        if self.pkg.days_to_production == "0":
+        
+        # now date object
+        today = datetime.datetime.now()
+        self.logger.debug("Set now: " + str(today))
+        
+        # test weekday, if empty skip the weekday test
+        if self.pkg.prod_weekdays != "":
+            # get weekday integer, 0 = Monday
+            t_wd = datetime.datetime.weekday(today)
+            self.logger.debug("Set weekday: " + str(t_wd))
+            # is the weekday in the provided integers string?
+            if str(t_wd) not in self.pkg.prod_weekdays:
+                self.autopkg_msg(
+                    "Weekday %d not allowed weekdays %s, skipping"
+                    % (t_wd, self.pkg.prod_weekdays)
+                )
+                return False
+        
+        # test start time, if empty skip the time test
+        if self.pkg.prod_not_before != "":
+            # get start time as date object
+            t_start = datetime.datetime.strptime(self.pkg.prod_not_before,'%H:%M')
+            # is now before this start time?
+            if today.time() < t_start.time():
+                self.autopkg_msg(
+                    "Current time %s is before production start time %s"
+                    % (today.time(), t_start.time())
+                )
+                return False
+            
+        # test end time, if empty skip the time test
+        if self.pkg.prod_not_after != "":
+            # get end time as date object
+            t_end = datetime.datetime.strptime(self.pkg.prod_not_after,'%H:%M')
+            # is now after this start time?
+            if today.time() > t_end.time():
+                self.autopkg_msg(
+                    "Current time %s is after production end time %s"
+                    % (today.time(), t_end.time())
+                )
+                return False
+        
+        # number of days until move to production
+        if self.pkg.days_until_prod == "0":
             self.logger.debug("Moving Now")
             self.autopkg_msg("Moving Now")
             return True
 
-        # we will parse the patch policy as in PatchManager.py:patch()
+        # calculate number of days since the package was put in test policies
+        delta_days = self.delta()
+        if delta_days == False:
+            self.logger.debug("Delta days = False")
+            return False
+        
+        # test delta days against argument
+        if delta_days >= int(self.pkg.days_until_prod):
+            self.logger.debug(
+                "%s Days delta >= %s Days before move, moving now"
+                % (delta_days, self.pkg.days_until_prod)
+            )
+            self.autopkg_msg(
+                "%s Days delta >= %s Days before move, moving now"
+                % (delta_days, self.pkg.days_until_prod)
+            )
+            return True
+        else:
+            self.logger.debug(
+                "%s Days delta < %s Days before move, skipping move to production"
+                % (delta_days, self.pkg.days_until_prod)
+            )
+            self.autopkg_msg(
+                "%s Days delta < %s Days before move, skipping move to production"
+                % (delta_days, self.pkg.days_until_prod)
+            )
+            return False
+
+
+
+    ## code here could be optimized
+    ## somewhat redundant lookups happening in later routines
+    ## we will parse the patch policy as in PatchManager.py:patch()
+    def delta(self):
         # download the list of titles
         url = self.base + "/patchsoftwaretitles"
         self.logger.debug("About to request PST list %s", url)
@@ -200,26 +286,7 @@ class Production(Processor):
                 self.logger.debug(
                     "Found delta to check: %s in %s" % (delta.days, title)
                 )
-                if delta.days >= int(self.pkg.days_to_production):
-                    self.logger.debug(
-                        "%s Days delta >= %s Days before move, moving now"
-                        % (delta.days, self.pkg.days_to_production)
-                    )
-                    self.autopkg_msg(
-                        "%s Days delta >= %s Days before move, moving now"
-                        % (delta.days, self.pkg.days_to_production)
-                    )
-                    return True
-                else:
-                    self.logger.debug(
-                        "%s Days delta < %s Days before move, skipping move to production"
-                        % (delta.days, self.pkg.days_to_production)
-                    )
-                    self.autopkg_msg(
-                        "%s Days delta < %s Days before move, skipping move to production"
-                        % (delta.days, self.pkg.days_to_production)
-                    )
-                    return False
+                return delta.days
         raise ProcessorError("Test patch policy missing")
         
 
@@ -432,7 +499,7 @@ class Production(Processor):
         """Do it!"""
         self.setup_logging()
         self.logger.debug("Starting")
-        self.autopkg_msg("Starting")
+        self.autopkg_msg("Starting %s" % self.pkg.patch)
         
         (self.base, self.auth) = self.load_prefs()
         # clear any pre-exising summary result
@@ -446,15 +513,50 @@ class Production(Processor):
             self.pkg.patch = self.pkg.package
         self.logger.debug("Set self.pkg.patch: %s", self.pkg.patch)
         
-        # try seems to return "None", using if/else for now
-        # do we have argument: days_to_production, if not set it to "0"
-        if self.env.get("days_to_production"):
-            self.pkg.days_to_production = self.env.get("days_to_production")
-        else:
-            self.pkg.days_to_production = "0"
-        self.logger.debug("Set self.pkg.days_to_production: %s", self.pkg.days_to_production)
-        self.autopkg_msg("Days to production for %s: %s " % (self.pkg.patch, self.pkg.days_to_production))
+        # days_until_prod, if not set the default is "0"
+        self.pkg.days_until_prod = self.env.get("days_until_prod", "0")
+        self.logger.debug("Set self.pkg.days_until_prod: %s", self.pkg.days_until_prod)
+        self.autopkg_msg(
+            "Days until production: %s "
+            % self.pkg.days_until_prod
+        )
         
+        # prod_weekdays, if not set the default is ""
+        self.pkg.prod_weekdays = self.env.get("prod_weekdays", "")
+        self.logger.debug("Set self.pkg.prod_weekdays: %s", self.pkg.prod_weekdays)
+        if self.pkg.prod_weekdays == "":
+            log_msg = "ANY"
+        else:
+            log_msg = self.pkg.prod_weekdays
+        self.autopkg_msg(
+            "Production only on weekday(s): %s "
+            % log_msg
+        )
+        
+        # prod_not_before, if not set the default is ""
+        self.pkg.prod_not_before = self.env.get("prod_not_before", "")
+        self.logger.debug("Set self.pkg.prod_not_before: %s", self.pkg.prod_not_before)
+        if self.pkg.prod_not_before == "":
+            log_msg = "ANY"
+        else:
+            log_msg = self.pkg.prod_not_before
+        self.autopkg_msg(
+            "Production not before time: %s "
+            % log_msg
+        )
+                
+        # prod_not_after, if not set the default is ""
+        self.pkg.prod_not_after = self.env.get("prod_not_after", "")
+        self.logger.debug("Set self.pkg.prod_not_after: %s", self.pkg.prod_not_after)
+        if self.pkg.prod_not_after == "":
+            log_msg = "ANY"
+        else:
+            log_msg = self.pkg.prod_not_after
+        self.autopkg_msg(
+            "Production not before time: %s "
+            % log_msg
+        )
+                
         # Is it time to move to production?
         if not self.time_to_move():
             self.logger.debug("Time to move = False :: ENDING")
