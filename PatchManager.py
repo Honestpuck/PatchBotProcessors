@@ -34,6 +34,9 @@ class Package:
     name = ""  # full name of the package '<package>-<version>.pkg'
     version = ""  # the version of our package
     idn = ""  # id of the package in our JP server
+    test_weekdays = ""  # allowed weekdays for deployment to test
+    test_not_before = ""  # earliest time for deployment to test
+    test_not_after = ""  # latest time for deployment to test
 
 
 class PatchManager(Processor):
@@ -45,6 +48,16 @@ class PatchManager(Processor):
     input_variables = {
         "package": {"required": True, "description": "Application part of package name"},
         "patch": {"required": False, "description": "Patch name"},
+        "test_weekdays": {
+            "required": False,
+            "description": "Limit weekdays for deployment to test"},
+        "test_not_before": {
+            "required": False,
+            "description": "Earliest time for deployment to test"},
+        "test_not_after": {
+            "required": False,
+            "description": "Latest time for deployment to test"},
+
     }
     output_variables = {
         "patch_manager_summary_result": {"description": "Summary of action"}
@@ -77,6 +90,59 @@ class PatchManager(Processor):
     def autopkg_msg(self, the_msg):
         """Defines a simple prefixed string to stdout for autopkg"""
         print(APPNAME + ': ' + the_msg)
+
+
+    ## essentially identical to Production.py/time_for_production(), w/o days delta
+    def time_for_testing(self):
+        """determine whether or not to move to testing"""
+        self.logger.debug("Time For Testing?")
+
+        # now date object
+        today = datetime.datetime.now()
+        self.logger.debug("Set now: " + str(today))
+
+        # test weekday, if empty skip the weekday test
+        if self.pkg.test_weekdays != "":
+            # get weekday integer, 0 = Monday
+            t_wd = datetime.datetime.weekday(today)
+            self.logger.debug("Set weekday: " + str(t_wd))
+            # is the weekday in the provided integers string?
+            if str(t_wd) not in self.pkg.test_weekdays:
+                self.autopkg_msg(
+                    "Weekday %d not in allowed weekdays %s, skipping"
+                    % (t_wd, self.pkg.test_weekdays)
+                )
+                return False
+
+        # test start time, if empty skip the time test
+        if self.pkg.test_not_before != "":
+            # get start time as date object
+            t_start = datetime.datetime.strptime(self.pkg.test_not_before,'%H:%M')
+            # is now before this start time?
+            if today.time() < t_start.time():
+                self.autopkg_msg(
+                    "Current time %s is before testing start time %s"
+                    % (today.time(), t_start.time())
+                )
+                return False
+
+        # test end time, if empty skip the time test
+        if self.pkg.test_not_after != "":
+            # get end time as date object
+            t_end = datetime.datetime.strptime(self.pkg.test_not_after,'%H:%M')
+            # is now after this start time?
+            if today.time() > t_end.time():
+                self.autopkg_msg(
+                    "Current time %s is after testing end time %s"
+                    % (today.time(), t_end.time())
+                )
+                return False
+
+        # all good, move to testing
+        self.logger.debug("Moving Now")
+        self.autopkg_msg("Moving Now")
+        return True
+
 
 
     def policy(self):
@@ -295,6 +361,47 @@ class PatchManager(Processor):
         except KeyError:
             self.pkg.patch = self.pkg.package
         self.autopkg_msg("Starting %s" % self.pkg.patch)
+
+        # test_weekdays, if not set the default is ""
+        self.pkg.test_weekdays = self.env.get("test_weekdays", "")
+        self.logger.debug("Set self.pkg.test_weekdays: %s", self.pkg.test_weekdays)
+        if self.pkg.test_weekdays == "":
+            log_msg = "ANY"
+        else:
+            log_msg = self.pkg.test_weekdays
+        self.autopkg_msg(
+            "Testing only on weekday(s): %s "
+            % log_msg
+        )
+
+        # test_not_before, if not set the default is ""
+        self.pkg.test_not_before = self.env.get("test_not_before", "")
+        self.logger.debug("Set self.pkg.test_not_before: %s", self.pkg.test_not_before)
+        if self.pkg.test_not_before == "":
+            log_msg = "ANY"
+        else:
+            log_msg = self.pkg.test_not_before
+        self.autopkg_msg(
+            "Production not before time: %s "
+            % log_msg
+        )
+
+        # test_not_after, if not set the default is ""
+        self.pkg.test_not_after = self.env.get("test_not_after", "")
+        self.logger.debug("Set self.pkg.test_not_after: %s", self.pkg.test_not_after)
+        if self.pkg.test_not_after == "":
+            log_msg = "ANY"
+        else:
+            log_msg = self.pkg.test_not_after
+        self.autopkg_msg(
+            "Production not before time: %s "
+            % log_msg
+        )
+
+        # Is it time to move to testing?
+        if not self.time_for_testing():
+            self.logger.debug("Time for test = False :: ENDING")
+            return
 
         self.pkg.version = self.policy()
         pol_id = self.patch()

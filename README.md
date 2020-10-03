@@ -9,8 +9,8 @@ Details can be found at https://github.com/Honestpuck/PatchBot
 
 ## Branch mvp-3 is our edit for consideration.
 
-### Example recipes can be seen here:
-- https://github.com/metroeast/metroeast-recipes/tree/master/GoogleChrome
+### Example recipes and templates can be seen here:
+- https://github.com/metroeast/metroeast-recipes/
 
 **GoogleChrome.jpci is a Jamf Pro Cloud Importer recipe**<br>
 .jpci recipes call all PatchBot processors in order:
@@ -18,22 +18,29 @@ Details can be found at https://github.com/Honestpuck/PatchBot
 - PatchManager.py
 - Production.py
 
-A recipe can specify the days in test, before move to production.  This is managed by specifying an integer in the arguments of the Production processor section of a recipe.
-- days_until_prod
+Optional recipe input arguments, provide scheduling controls; along with the main AutoPkg run cycle configuration (launchd settings).  When empty, the criteria is treated as "ANY" day or time, and no delay or 0 days between test and production.
 
-A recipe can specify the weekdays and hours, when a move to production is allowed to happen.
-- prod_weekdays
-- prod_not_before
-- prod_not_after
+Recipes can specify the weekdays and hours, when a move to testing is allowed to happen.
+- LIMIT_TEST_WEEKDAYS
+- LIMIT_TEST_NOT_BEFORE
+- LIMIT_TEST_NOT_AFTER
+
+Recipes can specify the minimum days before moving from test to production.
+- MIN_DAYS_FROM_TEST_TO_PROD
+
+Recipes can specify the weekdays and hours, when a move to production is allowed to happen.
+- LIMIT_PROD_WEEKDAYS
+- LIMIT_PROD_NOT_BEFORE
+- LIMIT_PROD_NOT_AFTER
 
 When specified, the above criteria must be met before the process will proceed.
 
-Current time and date are used to check against weekdays, not before time, and not after time.
+Current time and date are used to check against the arguments provided.
 
-The prod_weekdays argument can include any of the the numbers 0 through 6 as a string, which represent Monday through Sunday, respectively.
+The …_WEEKDAYS arguments can include any of the the numbers 0 through 6 as a string, which represent Monday through Sunday, respectively.
 > For example: Mon, Tue, Wed, and Thu == "0123"
 
-The prod_not_before and prod_not_after are 24 hour time strings, HH:MM format.
+The …_NOT_BEFORE and …_NOT_AFTER are 24 hour time strings, HH:MM format.
 
 Production.py has been modified to use logic similar to PatchBotTools/Move.py
 

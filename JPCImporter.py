@@ -194,7 +194,7 @@ class JPCImporter(Processor):
         pol_id = ET.fromstring(ret.text).findtext("id")
         self.logger.debug("got pol_id: %s", pol_id)
         self.logger.info("Done Package: %s Test Policy: %s", pkg, pol_id)
-        self.autopkg_msg("%s policy updated with pkg %s, set to disabled" % (policy_name, pkg))
+        self.autopkg_msg("%s policy updated with pkg %s" % (policy_name, pkg))
         return pol_id
 
     def main(self):
