@@ -269,11 +269,9 @@ class PatchManager(Processor):
             del self.env["patch_manager_summary_result"]
         self.logger.debug("About to update package")
         self.pkg.package = self.env.get("package")
-        try:
-            self.pkg.patch = self.env.get("patch")
-        except KeyError:
+        self.pkg.patch = self.env.get("patch")
+        if not self.pkg.patch:
             self.pkg.patch = self.pkg.package
-
         self.pkg.version = self.policy()
         pol_id = self.patch()
         if pol_id != 0:

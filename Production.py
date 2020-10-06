@@ -280,9 +280,8 @@ class Production(Processor):
             self.logger.debug("Clearing prev summary")
             del self.env["prod_summary_result"]
         self.pkg.package = self.env.get("package")
-        try:
-            self.pkg.patch = self.env.get("patch")
-        except KeyError:
+        self.pkg.patch = self.env.get("patch")
+        if not self.pkg.patch:
             self.pkg.patch = self.pkg.package
         self.lookup()
         self.production()
