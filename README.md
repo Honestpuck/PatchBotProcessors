@@ -5,7 +5,7 @@ Details can be found at https://github.com/Honestpuck/PatchBot
 
 
 
-## MetroEast is working towards changes to PatchBot allowing all execution be to managed in AutoPkg recipes.  The intended result is to remove the need for additional scripts, a .ptch recipe, launchd triggering, and text file editing.
+## MetroEast is working towards changes to PatchBot allowing all execution be to managed in AutoPkgr.app using custom recipes.  The intended result is to remove the need for additional scripts, a .ptch recipe, launchd triggering, and text file editing.
 
 ## Branch mvp-3 is our edit for consideration.
 
@@ -21,17 +21,17 @@ Details can be found at https://github.com/Honestpuck/PatchBot
 Optional recipe input arguments, provide scheduling controls; along with the main AutoPkg run cycle configuration (launchd settings).  When empty, the criteria is treated as "ANY" day or time, and no delay or 0 days between test and production.
 
 Recipes can specify the weekdays and hours, when a move to testing is allowed to happen.
-- LIMIT_TEST_WEEKDAYS
-- LIMIT_TEST_NOT_BEFORE
-- LIMIT_TEST_NOT_AFTER
+- PM_TEST_WEEKDAYS
+- PM_TEST_NOT_BEFORE
+- PM_TEST_NOT_AFTER
 
 Recipes can specify the minimum days before moving from test to production.
-- MIN_DAYS_FROM_TEST_TO_PROD
+- PM_MIN_DAYS_FROM_TEST_TO_PROD
 
 Recipes can specify the weekdays and hours, when a move to production is allowed to happen.
-- LIMIT_PROD_WEEKDAYS
-- LIMIT_PROD_NOT_BEFORE
-- LIMIT_PROD_NOT_AFTER
+- PM_PROD_WEEKDAYS
+- PM_PROD_NOT_BEFORE
+- PM_PROD_NOT_AFTER
 
 When specified, the above criteria must be met before the process will proceed.
 
