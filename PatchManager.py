@@ -167,7 +167,7 @@ class PatchManager(Processor):
             self.base = prefs["url"] + "/JSSResource/"
             self.auth = (prefs["user"], prefs["password"])
         policy_name = "TEST-{}".format(self.pkg.package)
-        self.autopkg_msg("Geting version from policy: %s" % policy_name)
+        self.autopkg_msg("Getting version from policy: %s" % policy_name)
         url = self.base + "policies/name/{}".format(policy_name)
         self.logger.debug(
             "About to make request URL %s, auth %s" % (url, self.auth)
@@ -338,6 +338,7 @@ class PatchManager(Processor):
                 self.logger.debug("About to change PP: %s" % url)
                 ret = requests.put(url, auth=self.auth, data=data)
                 if ret.status_code != 201:
+                    self.logger.debug("ret: %s" % ret)
                     raise ProcessorError(
                         "Patch policy update failed with code: %s"
                         % ret.status_code
