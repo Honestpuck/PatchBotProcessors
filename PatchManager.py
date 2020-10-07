@@ -162,6 +162,7 @@ class PatchManager(Processor):
         done = False
         for record in root.findall("versions/version"):
             if self.pkg.version in record.findtext("software_version"):
+                patch_def_software_version = record.findtext("software_version")
                 self.logger.debug("Found our version")
                 if record.findtext("package/name"):
                     self.logger.debug("Definition already points to package")
@@ -238,7 +239,7 @@ class PatchManager(Processor):
                         "Version %s already done" % self.pkg.version
                     )
                     return 0
-                root.find("general/target_version").text = self.pkg.version
+                root.find("general/target_version").text = patch_def_software_version
                 root.find("general/release_date").text = ""
                 root.find("general/enabled").text = "true"
                 # create a description with date
