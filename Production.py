@@ -178,7 +178,7 @@ class Production(Processor):
         # find the patch version that matches our version
         done = False
         for record in root.findall("versions/version"):
-            if record.findtext("software_version") == self.pkg.version:
+            if self.pkg.version in record.findtext("software_version"):
                 package = record.find("package")
                 add = ET.SubElement(package, "id")
                 add.text = self.pkg.idn
