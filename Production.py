@@ -179,6 +179,7 @@ class Production(Processor):
         done = False
         for record in root.findall("versions/version"):
             if self.pkg.version in record.findtext("software_version"):
+                patch_def_software_version = record.findtext("software_version")
                 package = record.find("package")
                 add = ET.SubElement(package, "id")
                 add.text = self.pkg.idn
@@ -231,7 +232,7 @@ class Production(Processor):
                     )
                 # now edit the patch policy
                 root = ET.fromstring(ret.text)
-                root.find("general/target_version").text = self.pkg.version
+                root.find("general/target_version").text = patch_def_software_version
                 root.find("general/release_date").text = ""
                 # create a description with date
                 now = datetime.datetime.now().strftime(" (%Y-%m-%d)")
