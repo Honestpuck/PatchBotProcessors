@@ -77,6 +77,9 @@ class Production(Processor):
             url = prefs["url"]
             auth = (prefs["user"], prefs["password"])
         base = url + "/JSSResource"
+        # some API calls we want the JSON. NOTE: Since the API defaults to XML
+        # we can just not pass headers for those calls and we get the XML
+        self.hdrs = {"accept": "application/json"}
         return (base, auth)
 
     def setup_logging(self):
@@ -99,6 +102,34 @@ class Production(Processor):
         )
         self.logger.addHandler(ch)
         self.logger.setLevel(LOGLEVEL)
+
+    def check_delta(self):
+        now = datetime.datetime.now()
+        recipes = []
+        policies = self.policy_list()
+        for key in policies:
+            if "Test" in key:
+                self.logger.warning("Found Test patch policy: " + key)
+                policy = self.policy(str(policies[key]))
+                if not policy["general"]["enabled"]:
+                    self.logger.debug("Policy not enabled")
+                    return(False)
+                description = policy["user_interaction"][
+                    "self_service_description"
+                ].split()
+                # we may have found a patch policy with no proper description yet
+                if len(description) != 3:
+                    return(False)
+                title, datestr = description[1:]
+                date = datetime.datetime.strptime(datestr, "(%Y-%m-%d)")
+                delta = now - date
+                self.logger.debug(
+                    "Found delta to check: %s in %s" % (delta.days, title)
+                )
+                if delta.days < self.pkg.delta:
+                    return(True)
+        return(False)
+
 
     def lookup(self):
         """look up test policy to find package name, id and version """
@@ -280,11 +311,11 @@ class Production(Processor):
 
     def policy_list(self):
         """ get the list of patch policies from JP and turn it into a dictionary """
-        url = self.base + "patchpolicies"
+        url = self.base + "/patchpolicies"
         ret = requests.get(url, auth=self.auth, headers=self.hdrs)
         self.logger.debug("GET policy list url: %s status: %s" % (url, ret.status_code))
         if ret.status_code != 200:
-            raise self.Error("GET failed URL: %s Err: %s" % (url, ret.status_code))
+            raise ProcessorError("GET failed URL: %s Err: %s" % (url, ret.status_code))
         # turn the list into a dictionary keyed on the policy name
         d = {}
         for p in ret.json()["patch_policies"]:
@@ -293,39 +324,12 @@ class Production(Processor):
 
     def policy(self, idn):
         """ get a single patch policy """
-        url = self.base + "patchpolicies/id/" + idn
+        url = self.base + "/patchpolicies/id/" + idn
         ret = requests.get(url, auth=self.auth, headers=self.hdrs)
         self.logger.debug("GET policy url: %s status: %s" % (url, ret.status_code))
         if ret.status_code != 200:
             raise self.Error("GET failed URL: %s Err: %s" % (url, ret.status_code))
         return ret.json()["patch_policy"]
-
-    def check_delta(self):
-        now = datetime.datetime.now()
-        recipes = []
-        policies = self.policy_list()
-        for key in policies:
-            if "Test" in key:
-                self.logger.warning("Found Test patch policy: " + key)
-                policy = self.policy(str(policies[key]))
-                if not policy["general"]["enabled"]:
-                    self.logger.debug("Policy not enabled")
-                    return False
-                description = policy["user_interaction"][
-                    "self_service_description"
-                ].split()
-                # we may have found a patch policy with no proper description yet
-                if len(description) != 3:
-                    return False
-                title, datestr = description[1:]
-                date = datetime.datetime.strptime(datestr, "(%Y-%m-%d)")
-                delta = now - date
-                self.logger.debug(
-                    "Found delta to check: %s in %s" % (delta.days, title)
-                )
-                if delta.days < self.pkg.delta:
-                    return True
-        return False
 
     def main(self):
         """Do it!"""
@@ -342,7 +346,7 @@ class Production(Processor):
             self.pkg.patch = self.pkg.package
         if not self.pkg.delta:
             self.pkg.delta = DEFAULT_DELTA
-        if check_delta():
+        if self.check_delta():
             self.logger.debug("Passed delta. Package: %s", self.pkg.package)
             self.lookup()
             self.production()
