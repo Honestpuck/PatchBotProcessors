@@ -149,6 +149,7 @@ class Production(Processor):
         # download the list of titles
         url = self.base + "/patchsoftwaretitles"
         ret = requests.get(url, auth=self.auth)
+        patch_def_software_version = ""
         self.logger.debug("About to request PST list %s", url)
         if ret.status_code != 200:
             raise ProcessorError(
@@ -340,7 +341,8 @@ class Production(Processor):
             self.pkg.patch = self.pkg.package
         if not self.pkg.delta:
             self.pkg.delta = DEFAULT_DELTA
-        if delta_check():
+        if check_delta():
+            self.logger.debug("Passed delta. Package: %s", self.pkg.package)
             self.lookup()
             self.production()
             self.logger.debug("Post production self.pkg.patch: %s", self.pkg.patch)
