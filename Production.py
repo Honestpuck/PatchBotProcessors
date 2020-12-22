@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 #
-# Production v2.1
-# Tony Williams 2020-05-24
+# Production v3.0b
+# Tony Williams 2020-12-22
 #
 # ARW 2020-06-25 Code clean up
 # ARW 2020-07-07 Straighten logic for autopkg report
+# ARW 2020-12-22 First hack at version 3
 
 """See docstring for Production class"""
 
