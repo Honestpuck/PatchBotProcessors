@@ -321,7 +321,7 @@ class Production(Processor):
         # get two DIFFERENT cookies for this.
 
         # the front page will give us the cookies
-        r = requests.get(server)
+        r = requests.get(self.base)
 
         cookie_value = r.cookies.get('APBALANCEID')
         if cookie_value:
