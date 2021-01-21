@@ -92,12 +92,31 @@ class PatchManager(Processor):
             prefs = plistlib.load(fp)
             self.base = prefs["url"] + "/JSSResource/"
             self.auth = (prefs["user"], prefs["password"])
+
+        # let's use the cookies to make sure we hit the
+        # same server for every request.
+        # the complication here is that ordinary and Premium Jamfers
+        # get two DIFFERENT cookies for this.
+
+        # the front page will give us the cookies
+        r = requests.get(server)
+
+        cookie_value = r.cookies.get('APBALANCEID')
+        if cookie_value:
+            # we are NOT premium Jamf Cloud
+            self.cookies = dict(APBALANCEID=cookie_value)
+            c_cookie = "APBALANCEID=%s", cookie_value
+        else:
+            cookie_value = r.cookies['AWSALB']
+            self.cookies = dict(AWSALB=cookie_value)
+            c_cookie = "AWSALB=%s", cookie_value
+
         policy_name = "TEST-{}".format(self.pkg.package)
         url = self.base + "policies/name/{}".format(policy_name)
         self.logger.debug(
             "About to make request URL %s, auth %s" % (url, self.auth)
         )
-        ret = requests.get(url, auth=self.auth)
+        ret = requests.get(url, auth=self.auth, cookies=self.cookies)
         if ret.status_code != 200:
             self.logger.debug(
                 "TEST Policy %s not found error: %s"
@@ -126,7 +145,7 @@ class PatchManager(Processor):
         # download the list of titles
         url = self.base + "patchsoftwaretitles"
         self.logger.debug("About to request PST list %s", url)
-        ret = requests.get(url, auth=self.auth)
+        ret = requests.get(url, auth=self.auth, cookies=self.cookies)
         if ret.status_code != 200:
             raise ProcessorError(
                 "Patch list download failed: {} : {}".format(
@@ -149,7 +168,7 @@ class PatchManager(Processor):
         # get the patch list for our title
         url = self.base + "patchsoftwaretitles/id/" + str(ident)
         self.logger.debug("About to request PST by ID: %s" % url)
-        ret = requests.get(url, auth=self.auth)
+        ret = requests.get(url, auth=self.auth, cookies=self.cookies)
         if ret.status_code != 200:
             raise ProcessorError(
                 "Patch software download failed: {} : {}".format(
@@ -186,7 +205,7 @@ class PatchManager(Processor):
         # update the patch def
         data = ET.tostring(root)
         self.logger.debug("About to put PST: %s" % url)
-        ret = requests.put(url, auth=self.auth, data=data)
+        ret = requests.put(url, auth=self.auth, data=data, cookies=self.cookies)
         if ret.status_code != 201:
             raise ProcessorError(
                 "Patch definition update failed with code: %s"
@@ -197,7 +216,7 @@ class PatchManager(Processor):
         # first get the list of patch policies for our software title
         url = self.base + "patchpolicies/softwaretitleconfig/id/" + str(ident)
         self.logger.debug("About to request patch list: %s" % url)
-        ret = requests.get(url, auth=self.auth)
+        ret = requests.get(url, auth=self.auth, cookies=self.cookies)
         if ret.status_code != 200:
             raise ProcessorError(
                 "Patch policy list download failed: {} : {}".format(
@@ -217,7 +236,7 @@ class PatchManager(Processor):
                 pol_id = pol.findtext("id")
                 url = self.base + "patchpolicies/id/" + str(pol_id)
                 self.logger.debug("About to request PP by ID: %s" % url)
-                ret = requests.get(url, auth=self.auth)
+                ret = requests.get(url, auth=self.auth, cookies=self.cookies)
                 if ret.status_code != 200:
                     raise ProcessorError(
                         "Patch policy download failed: {} : {}".format(
@@ -250,7 +269,8 @@ class PatchManager(Processor):
                 ).text = desc
                 data = ET.tostring(root)
                 self.logger.debug("About to change PP: %s" % url)
-                ret = requests.put(url, auth=self.auth, data=data)
+                ret = requests.put(url, auth=self.auth, 
+                    data=data, cookies=self.cookies)
                 if ret.status_code != 201:
                     raise ProcessorError(
                         "Patch policy update failed with code: %s"

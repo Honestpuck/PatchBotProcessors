@@ -137,7 +137,7 @@ class Production(Processor):
         url = self.base + "/policies/name/Test-" + self.pkg.package
         pack_base = "package_configuration/packages/package"
         self.logger.debug("About to request %s", url)
-        ret = requests.get(url, auth=self.auth)
+        ret = requests.get(url, auth=self.auth, cookies=self.cookies)
         if ret.status_code != 200:
             raise ProcessorError(
                 "Test policy download failed: {} : {}".format(
@@ -156,7 +156,7 @@ class Production(Processor):
         url = self.base + "/policies/name/Install " + self.pkg.package
         pack_base = "package_configuration/packages/package"
         self.logger.debug("About to request %s", url)
-        ret = requests.get(url, auth=self.auth)
+        ret = requests.get(url, auth=self.auth, cookies=self.cookies)
         if ret.status_code != 200:
             raise ProcessorError(
                 "Prod policy download failed: {} : {}".format(
@@ -168,7 +168,8 @@ class Production(Processor):
         prod.find(pack_base + "/name").text = self.pkg.name
         data = ET.tostring(prod)
         self.logger.debug("About to put install policy %s", url)
-        ret = requests.put(url, auth=self.auth, data=data)
+        ret = requests.put(url, auth=self.auth, 
+            data=data, cookies=self.cookies)
         if ret.status_code != 201:
             raise ProcessorError(
                 "Prod policy upload failed: {} : {}".format(
@@ -180,7 +181,7 @@ class Production(Processor):
         """now we start on the patch definition"""
         # download the list of titles
         url = self.base + "/patchsoftwaretitles"
-        ret = requests.get(url, auth=self.auth)
+        ret = requests.get(url, auth=self.auth, cookies=self.cookies)
         patch_def_software_version = ""
         self.logger.debug("About to request PST list %s", url)
         if ret.status_code != 200:
@@ -204,7 +205,7 @@ class Production(Processor):
         # get patch list for our title
         url = self.base + "/patchsoftwaretitles/id/" + str(pst_id)
         self.logger.debug("About to request PST by ID: %s", url)
-        ret = requests.get(url, auth=self.auth)
+        ret = requests.get(url, auth=self.auth, cookies=self.cookies)
         if ret.status_code != 200:
             raise ProcessorError(
                 "Patch software download failed: {} : {}".format(
@@ -233,7 +234,7 @@ class Production(Processor):
         # update the patch def
         data = ET.tostring(root)
         self.logger.debug("About to put PST: %s", url)
-        ret = requests.put(url, auth=self.auth, data=data)
+        ret = requests.put(url, auth=self.auth, data=data, cookies=self.cookies)
         if ret.status_code != 201:
             raise ProcessorError(
                 "Patch definition update failed with code: %s"
@@ -260,7 +261,7 @@ class Production(Processor):
                 # now grab that policy
                 url = self.base + "/patchpolicies/id/" + str(pol_id)
                 self.logger.debug("About to request PP by ID: %s", url)
-                ret = requests.get(url, auth=self.auth)
+                ret = requests.get(url, auth=self.auth, cookies=self.cookies)
                 if ret.status_code != 200:
                     raise ProcessorError(
                         "Patch policy download failed: {} : {}".format(
@@ -279,7 +280,8 @@ class Production(Processor):
                 ).text = desc
                 data = ET.tostring(root)
                 self.logger.debug("About to update Stable PP: %s", url)
-                ret = requests.put(url, auth=self.auth, data=data)
+                ret = requests.put(url, auth=self.auth, 
+                    data=data, cookies=self.cookies)
                 if ret.status_code != 201:
                     raise ProcessorError(
                         "Stable patch update failed with code: %s"
@@ -290,7 +292,7 @@ class Production(Processor):
                 # now grab that policy
                 url = self.base + "/patchpolicies/id/" + str(pol_id)
                 self.logger.debug("About to request PP by ID: %s", url)
-                ret = requests.get(url, auth=self.auth)
+                ret = requests.get(url, auth=self.auth, cookies=self.cookies)
                 if ret.status_code != 200:
                     raise ProcessorError(
                         "Patch policy download failed: {} : {}".format(
@@ -302,7 +304,8 @@ class Production(Processor):
                 root.find("general/enabled").text = "false"
                 data = ET.tostring(root)
                 self.logger.debug("About to update Test PP: %s", url)
-                ret = requests.put(url, auth=self.auth, data=data)
+                ret = requests.put(url, auth=self.auth, 
+                    data=data, cookies=self.cookies)
                 if ret.status_code != 201:
                     raise ProcessorError(
                         "Test patch update failed with code: %s"
@@ -311,8 +314,27 @@ class Production(Processor):
 
     def policy_list(self):
         """ get the list of patch policies from JP and turn it into a dictionary """
+
+        # let's use the cookies to make sure we hit the
+        # same server for every request.
+        # the complication here is that ordinary and Premium Jamfers
+        # get two DIFFERENT cookies for this.
+
+        # the front page will give us the cookies
+        r = requests.get(server)
+
+        cookie_value = r.cookies.get('APBALANCEID')
+        if cookie_value:
+            # we are NOT premium Jamf Cloud
+            self.cookies = dict(APBALANCEID=cookie_value)
+            c_cookie = "APBALANCEID=%s", cookie_value
+        else:
+            cookie_value = r.cookies['AWSALB']
+            self.cookies = dict(AWSALB=cookie_value)
+            c_cookie = "AWSALB=%s", cookie_value
+
         url = self.base + "/patchpolicies"
-        ret = requests.get(url, auth=self.auth, headers=self.hdrs)
+        ret = requests.get(url, auth=self.auth, headers=self.hdrs, cookies=self.cookies)
         self.logger.debug("GET policy list url: %s status: %s" % (url, ret.status_code))
         if ret.status_code != 200:
             raise ProcessorError("GET failed URL: %s Err: %s" % (url, ret.status_code))
@@ -325,7 +347,7 @@ class Production(Processor):
     def policy(self, idn):
         """ get a single patch policy """
         url = self.base + "/patchpolicies/id/" + idn
-        ret = requests.get(url, auth=self.auth, headers=self.hdrs)
+        ret = requests.get(url, auth=self.auth, headers=self.hdrs, cookies=self.cookies)
         self.logger.debug("GET policy url: %s status: %s" % (url, ret.status_code))
         if ret.status_code != 200:
             raise self.Error("GET failed URL: %s Err: %s" % (url, ret.status_code))
