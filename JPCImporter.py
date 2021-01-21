@@ -107,11 +107,11 @@ class JPCImporter(Processor):
         if cookie_value:
             # we are NOT premium Jamf Cloud
             self.cookies = dict(APBALANCEID=cookie_value)
-            c_cookie = "APBALANCEID=%s", cookie_value
+            c_cookie = "APBALANCEID={}".format(cookie_value)
         else:
             cookie_value = r.cookies['AWSALB']
             self.cookies = dict(AWSALB=cookie_value)
-            c_cookie = "AWSALB=%s", cookie_value
+            c_cookie = "AWSALB={}".format(cookie_value)
 
         # check to see if the package already exists
         url = base + "packages/name/{}".format(pkg)
