@@ -84,13 +84,15 @@ class PatchManager(Processor):
             )
             fp = open(plist, "rb")
             prefs = plistlib.load(fp)
-            self.base = prefs["JSS_URL"] + "/JSSResource/"
+            server = prefs["JSS_URL"]
+            self.base = server + "/JSSResource/"
             self.auth = (prefs["API_USERNAME"], prefs["API_PASSWORD"])
         else:
             plist = path.expanduser("~/Library/Preferences/JPCImporter.plist")
             fp = open(plist, "rb")
             prefs = plistlib.load(fp)
-            self.base = prefs["url"] + "/JSSResource/"
+            server = prefs["url"]
+            self.base = server + "/JSSResource/"
             self.auth = (prefs["user"], prefs["password"])
 
         # let's use the cookies to make sure we hit the
