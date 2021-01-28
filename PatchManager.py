@@ -77,7 +77,7 @@ class PatchManager(Processor):
             "******** Starting policy %s *******" % self.pkg.package
         )
         # Which pref format to use, autopkg or jss_importer
-        autopkg = False
+        autopkg = True
         if autopkg:
             plist = path.expanduser(
                 "~/Library/Preferences/com.github.autopkg.plist"

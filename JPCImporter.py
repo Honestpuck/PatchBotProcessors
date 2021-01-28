@@ -69,7 +69,7 @@ class JPCImporter(Processor):
     def load_prefs(self):
         """ load the preferences form file """
         # Which pref format to use, autopkg or jss_importer
-        autopkg = False
+        autopkg = True
         if autopkg:
             plist = path.expanduser(
                 "~/Library/Preferences/com.github.autopkg.plist"

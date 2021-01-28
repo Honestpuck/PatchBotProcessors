@@ -63,7 +63,7 @@ class Production(Processor):
     def load_prefs(self):
         """ load the preferences from file """
         # Which pref format to use, autopkg or jss_importer
-        autopkg = False
+        autopkg = True
         if autopkg:
             plist = path.expanduser(
                 "~/Library/Preferences/com.github.autopkg.plist"
@@ -105,31 +105,43 @@ class Production(Processor):
 
     def check_delta(self):
         now = datetime.datetime.now()
-        recipes = []
+        name = f"{self.pkg.patch} Test"
+        self.logger.debug(f"About to policy_list, name: {name}")
         policies = self.policy_list()
-        for key in policies:
-            if "Test" in key:
-                self.logger.warning("Found Test patch policy: " + key)
-                policy = self.policy(str(policies[key]))
-                if not policy["general"]["enabled"]:
-                    self.logger.debug("Policy not enabled")
-                    return(False)
-                description = policy["user_interaction"][
+        self.logger.debug("done policy_list")
+        try:
+            policy_id = policies[name]
+        except KeyError:
+            raise ProcessorError(
+                "Test policy key missing failed: {}".format(name)
+            )
+        self.logger.debug("")
+        url = self.base + "/patchpolicies/id/" + str(policy_id)
+        self.logger.debug("About to request %s", url)
+        ret = requests.get(url, headers=self.hdrs, auth=self.auth, cookies=self.cookies)
+        if ret.status_code != 200:
+            raise ProcessorError(
+                "Test policy download failed: {} : {}".format(
+                    ret.status_code, url
+                )
+            )
+        policy = ret.json()['patch_policy']
+        description = policy["user_interaction"][
                     "self_service_description"
                 ].split()
-                # we may have found a patch policy with no proper description yet
-                if len(description) != 3:
-                    return(False)
-                title, datestr = description[1:]
-                date = datetime.datetime.strptime(datestr, "(%Y-%m-%d)")
-                delta = now - date
-                self.logger.debug(
-                    "Found delta to check: %s in %s" % (delta.days, title)
-                )
-                if delta.days < self.pkg.delta:
-                    return(True)
+            
+        # we may have found a patch policy with no proper description yet
+        if len(description) != 3:
+            return(False)
+        title, datestr = description[1:]
+        date = datetime.datetime.strptime(datestr, "(%Y-%m-%d)")
+        delta = now - date
+        self.logger.debug(
+            "Found delta to check: %s in %s" % (delta.days, title)
+        )
+        if delta.days < self.pkg.delta:
+            return(True)
         return(False)
-
 
     def lookup(self):
         """look up test policy to find package name, id and version """
@@ -322,7 +334,6 @@ class Production(Processor):
 
         # the front page will give us the cookies
         r = requests.get(self.base)
-
         cookie_value = r.cookies.get('APBALANCEID')
         if cookie_value:
             # we are NOT premium Jamf Cloud
@@ -363,7 +374,10 @@ class Production(Processor):
             del self.env["prod_summary_result"]
         self.pkg.package = self.env.get("package")
         self.pkg.patch = self.env.get("patch")
-        self.pkg.delta = self.env.get("delta")
+        delta = self.env.get("delta")
+        if delta:
+            self.pkg.delta = int(delta)
+            self.logger.debug("Found delta %i", self.pkg.delta)
         if not self.pkg.patch:
             self.pkg.patch = self.pkg.package
         if not self.pkg.delta:
