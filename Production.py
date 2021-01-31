@@ -117,6 +117,8 @@ class Production(Processor):
             )
         self.logger.debug("Got policy list")
         policy = self.policy(str(policy_id))
+        if policy['general']['enabled'] == 'false':
+            return False
         description = policy["user_interaction"][
                     "self_service_description"
                 ].split()
