@@ -115,21 +115,11 @@ class Production(Processor):
             raise ProcessorError(
                 "Test policy key missing failed: {}".format(name)
             )
-        self.logger.debug("")
-        url = self.base + "/patchpolicies/id/" + str(policy_id)
-        self.logger.debug("About to request %s", url)
-        ret = requests.get(url, headers=self.hdrs, auth=self.auth, cookies=self.cookies)
-        if ret.status_code != 200:
-            raise ProcessorError(
-                "Test policy download failed: {} : {}".format(
-                    ret.status_code, url
-                )
-            )
-        policy = ret.json()['patch_policy']
+        self.logger.debug("Got policy list")
+        policy = self.policy(str(policy_id))
         description = policy["user_interaction"][
                     "self_service_description"
                 ].split()
-            
         # we may have found a patch policy with no proper description yet
         if len(description) != 3:
             return(False)
@@ -339,10 +329,12 @@ class Production(Processor):
             # we are NOT premium Jamf Cloud
             self.cookies = dict(APBALANCEID=cookie_value)
             c_cookie = "APBALANCEID=%s", cookie_value
+            self.logger.debug("APBALANCEID found")
         else:
             cookie_value = r.cookies['AWSALB']
             self.cookies = dict(AWSALB=cookie_value)
             c_cookie = "AWSALB=%s", cookie_value
+            self.logger.debug("APBALANCEID not found")
 
         url = self.base + "/patchpolicies"
         ret = requests.get(url, auth=self.auth, headers=self.hdrs, cookies=self.cookies)
@@ -378,10 +370,10 @@ class Production(Processor):
         if delta:
             self.pkg.delta = int(delta)
             self.logger.debug("Found delta %i", self.pkg.delta)
+        else:
+            self.pkg.delta = DEFAULT_DELTA
         if not self.pkg.patch:
             self.pkg.patch = self.pkg.package
-        if not self.pkg.delta:
-            self.pkg.delta = DEFAULT_DELTA
         if self.check_delta():
             self.logger.debug("Passed delta. Package: %s", self.pkg.package)
             self.lookup()
