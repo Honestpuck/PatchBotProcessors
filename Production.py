@@ -113,12 +113,15 @@ class Production(Processor):
             policy_id = policies[name]
         except KeyError:
             raise ProcessorError(
-                "Test policy key missing failed: {}".format(name)
+                "Test policy key missing: {}".format(name)
             )
         self.logger.debug("Got policy list")
         policy = self.policy(str(policy_id))
-        if policy['general']['enabled'] == 'false':
+        if 'false' in policy['general']['enabled']:
+            self.logger.debug("Test patch policy disabled")
             return False
+        else:
+            self.logger.debug(f"['general']['enabled'] :{policy['general']['enabled']}")
         description = policy["user_interaction"][
                     "self_service_description"
                 ].split()

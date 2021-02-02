@@ -130,9 +130,13 @@ class PatchManager(Processor):
             )
         self.logger.debug("TEST policy found")
         root = ET.fromstring(ret.text)
-        self.pkg.idn = root.find(
-            "package_configuration/packages/package/id"
-        ).text
+        try:
+            self.pkg.idn = root.find(
+                "package_configuration/packages/package/id"
+            ).text
+        except AttributeError:
+            self.logger.debug(f"Missing package definition in policy: {policy_name}")
+            raise ProcessorError("Missing package definition")
         self.pkg.name = root.find(
             "package_configuration/packages/package/name"
         ).text
