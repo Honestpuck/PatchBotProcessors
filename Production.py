@@ -115,10 +115,11 @@ class Production(Processor):
             raise ProcessorError(
                 "Test policy key missing: {}".format(name)
             )
-        self.logger.debug("Got policy list")
+        self.logger.debug(f"Got valid policy id: {policy_id}")
         policy = self.policy(str(policy_id))
-        if 'false' in policy['general']['enabled']:
-            self.logger.debug("Test patch policy disabled")
+        # self.logger.debug(f"back from policy(): {policy}")
+        if policy['general']['enabled'] == False:
+            self.logger.debug("TEST patch policy disabled")
             return False
         else:
             self.logger.debug(f"['general']['enabled'] :{policy['general']['enabled']}")
@@ -359,6 +360,7 @@ class Production(Processor):
         self.logger.debug("GET policy url: %s status: %s" % (url, ret.status_code))
         if ret.status_code != 200:
             raise self.Error("GET failed URL: %s Err: %s" % (url, ret.status_code))
+        self.logger.debug("About to return from policy")
         return ret.json()["patch_policy"]
 
     def main(self):
@@ -371,6 +373,7 @@ class Production(Processor):
             del self.env["prod_summary_result"]
         self.pkg.package = self.env.get("package")
         self.pkg.patch = self.env.get("patch")
+        self.logger.debug(f"Starting package {self.pkg.package}")
         delta = self.env.get("delta")
         if delta:
             self.pkg.delta = int(delta)
