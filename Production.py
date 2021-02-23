@@ -130,12 +130,15 @@ class Production(Processor):
         if len(description) != 3:
             return(False)
         title, datestr = description[1:]
+
         date = datetime.datetime.strptime(datestr, "(%Y-%m-%d)")
         delta = now - date
-        self.logger.debug(
-            "Found delta to check: %s in %s" % (delta.days, title)
-        )
-        if delta.days < self.pkg.delta:
+        self.logger.debug(f"    Description:{description}")
+        self.logger.debug(f"    Datestr    :{datestr}")
+        self.logger.debug(f"    Date       :{date}")
+        self.logger.debug(f"    Delta      :{delta.days}")
+
+        if delta.days >= self.pkg.delta:
             return(True)
         return(False)
 
