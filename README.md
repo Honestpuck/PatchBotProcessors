@@ -13,4 +13,4 @@ Changes can be summarised:
   
 The code *should* run, it has been vigorously tested. There are still things to be done. Certainly the Production processor could be cleaned up as it it grabs information to check the delta then throws it all away so the process to move a package from test into production has to find it all again, that's less than optimal and makes unnecessary API calls.
 
-Now that `delta` can be defined in a `.prod` recipe it is now possible to move a package from test into production from the command line. `autopkg run GoogleChrome.prod -k 'delta=0'` will move immediately Google Chrome from testing into production, for example.
+Now that `delta` can be defined in a `.prod` recipe it is now possible to move a package from test into production from the command line. `autopkg run GoogleChrome.prod -k 'delta=0'` will immediately move Google Chrome from testing into production, for example.
