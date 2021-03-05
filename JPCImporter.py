@@ -69,7 +69,7 @@ class JPCImporter(Processor):
     def load_prefs(self):
         """ load the preferences form file """
         # Which pref format to use, autopkg or jss_importer
-        autopkg = False
+        autopkg = True
         if autopkg:
             plist = path.expanduser(
                 "~/Library/Preferences/com.github.autopkg.plist"
@@ -95,10 +95,28 @@ class JPCImporter(Processor):
         pkg = path.basename(pkg_path)
         title = pkg.split("-")[0]
 
+        # let's use the cookies to make sure we hit the
+        # same server for every request.
+        # the complication here is that ordinary and Premium Jamfers
+        # get two DIFFERENT cookies for this.
+
+        # the front page will give us the cookies
+        r = requests.get(server)
+
+        cookie_value = r.cookies.get('APBALANCEID')
+        if cookie_value:
+            # we are NOT premium Jamf Cloud
+            self.cookies = dict(APBALANCEID=cookie_value)
+            c_cookie = "APBALANCEID={}".format(cookie_value)
+        else:
+            cookie_value = r.cookies['AWSALB']
+            self.cookies = dict(AWSALB=cookie_value)
+            c_cookie = "AWSALB={}".format(cookie_value)
+
         # check to see if the package already exists
         url = base + "packages/name/{}".format(pkg)
         self.logger.debug("About to get: %s", url)
-        ret = requests.get(url, auth=auth)
+        ret = requests.get(url, auth=auth, cookies=self.cookies)
         if ret.status_code == 200:
             self.logger.warning("Found existing package: %s", pkg)
             return 0
@@ -108,15 +126,19 @@ class JPCImporter(Processor):
         curl_auth = "%s:%s" % auth
         curl_url = server + "/dbfileupload"
         command = ["curl", "-u", curl_auth, "-s", "-X", "POST", curl_url]
+        command += ["-b", c_cookie]
         command += ["--header", "DESTINATION: 0"]
         command += ["--header", "OBJECT_ID: -1"]
         command += ["--header", "FILE_TYPE: 0"]
         command += ["--header", "FILE_NAME: {}".format(pkg)]
         command += ["--upload-file", pkg_path]
         self.logger.debug("About to curl: %s", pkg)
+        # the next two logger calls would contain
+        # the name and password used so uncomment
+        # only if you have good control of the logs
         # self.logger.debug("Auth: %s", curl_auth)
+        # self.logger.debug("command: %s", command)
         self.logger.debug("pkg_path: %s", pkg_path)
-        self.logger.debug("command: %s", command)
         ret = subprocess.check_output(command)
         self.logger.debug("Done - ret: %s", ret)
         packid = ET.fromstring(ret).findtext("id")
@@ -141,7 +163,8 @@ class JPCImporter(Processor):
         while True:
             count += 1
             self.logger.debug("package update attempt %s", count)
-            ret = requests.put(url, auth=auth, headers=hdrs, data=data)
+            ret = requests.put(url, auth=auth, headers=hdrs, 
+                data=data, cookies=self.cookies)
             if ret.status_code == 201:
                 break
             self.logger.debug("Attempt failed with code: %s" % ret.status_code)
@@ -155,7 +178,7 @@ class JPCImporter(Processor):
         # now for the test policy update
         policy_name = "TEST-{}".format(title)
         url = base + "policies/name/{}".format(policy_name)
-        ret = requests.get(url, auth=auth)
+        ret = requests.get(url, auth=auth, cookies=self.cookies)
         if ret.status_code != 200:
             raise ProcessorError(
                 "Test Policy %s not found: %s" % (url, ret.status_code)
@@ -170,7 +193,7 @@ class JPCImporter(Processor):
         root.find("package_configuration/packages/package/name").text = pkg
         url = base + "policies/id/{}".format(root.findtext("general/id"))
         data = ET.tostring(root)
-        ret = requests.put(url, auth=auth, data=data)
+        ret = requests.put(url, auth=auth, data=data, cookies=self.cookies)
         if ret.status_code != 201:
             raise ProcessorError(
                 "Test policy %s update failed: %s" % (url, ret.status_code)
