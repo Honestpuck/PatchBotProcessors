@@ -286,7 +286,7 @@ class Production(Processor):
                 root = ET.fromstring(ret.text)
                 root.find("general/target_version").text = patch_def_software_version
                 root.find("general/release_date").text = ""
-                root.find("user_interaction/deadlines/deadline_period") = DEFAULT_DEADLINE
+                root.find("user_interaction/deadlines/deadline_period") = deadline
                 # create a description with date
                 now = datetime.datetime.now().strftime(" (%Y-%m-%d)")
                 desc = "Update " + self.pkg.package + now
@@ -387,6 +387,12 @@ class Production(Processor):
             self.logger.debug("Found delta %i", self.pkg.delta)
         else:
             self.pkg.delta = DEFAULT_DELTA
+        deadline = self.env.get("deadline")
+        if deadline:
+            self.pkg.deadline = int(deadline)
+            self.logger.debug("Found deadline %i", self.pkg.deadline)
+        else:
+            self.pkg.deadline = DEFAULT_DEADLINE
         if not self.pkg.patch:
             self.pkg.patch = self.pkg.package
         if self.check_delta():
