@@ -286,7 +286,7 @@ class Production(Processor):
                 root = ET.fromstring(ret.text)
                 root.find("general/target_version").text = patch_def_software_version
                 root.find("general/release_date").text = ""
-                root.find("user_interaction/deadlines/deadline_period") = DEFAULT_DEADLINE
+                root.find("user_interaction/deadlines/deadline_period").text = DEFAULT_DEADLINE
                 # create a description with date
                 now = datetime.datetime.now().strftime(" (%Y-%m-%d)")
                 desc = "Update " + self.pkg.package + now
