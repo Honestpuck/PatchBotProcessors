@@ -179,12 +179,12 @@ class Production(Processor):
                     ret.status_code, url
                 )
             )
-        self.logger.debug(ret.text)
         prod = ET.fromstring(ret.text)
+        self.logger.debug(f"Prod: {prod}")
         self.logger.debug("Parsed XML from Install policy")
-        prod.find(pack_base + "/general/id").text = self.pkg.idn
+        prod.find("general/id").text = self.pkg.idn
         self.logger.debug("Got ID from Install")
-        prod.find(pack_base + "/general/name").text = self.pkg.name
+        prod.find("general/name").text = self.pkg.name
         self.logger.debug("Got name from Install")
         data = ET.tostring(prod)
         self.logger.debug("Parsed to XML for Install")
