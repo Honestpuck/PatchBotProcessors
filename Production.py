@@ -140,6 +140,7 @@ class Production(Processor):
         self.logger.debug(f"    Datestr    :{datestr}")
         self.logger.debug(f"    Date       :{date}")
         self.logger.debug(f"    Delta      :{delta.days}")
+        self.logger.debug(f"    PkgDelta   :{self.pkg.delta}")
 
         if delta.days >= self.pkg.delta:
             return(True)
@@ -171,6 +172,7 @@ class Production(Processor):
         pack_base = "package_configuration/packages/package"
         self.logger.debug("About to request %s", url)
         ret = requests.get(url, auth=self.auth, cookies=self.cookies)
+        self.logger.debug("After get status: %i", ret.status_code)
         if ret.status_code != 200:
             raise ProcessorError(
                 "Prod policy download failed: {} : {}".format(
@@ -178,9 +180,14 @@ class Production(Processor):
                 )
             )
         prod = ET.fromstring(ret.text)
-        prod.find(pack_base + "/id").text = self.pkg.idn
-        prod.find(pack_base + "/name").text = self.pkg.name
+        self.logger.debug(f"Prod: {prod}")
+        self.logger.debug("Parsed XML from Install policy")
+        prod.find("general/id").text = self.pkg.idn
+        self.logger.debug("Got ID from Install")
+        prod.find("general/name").text = self.pkg.name
+        self.logger.debug("Got name from Install")
         data = ET.tostring(prod)
+        self.logger.debug("Parsed to XML for Install")
         self.logger.debug("About to put install policy %s", url)
         ret = requests.put(url, auth=self.auth, 
             data=data, cookies=self.cookies)
@@ -274,7 +281,7 @@ class Production(Processor):
                 pol_id = pol.findtext("id")
                 # now grab that policy
                 url = self.base + "/patchpolicies/id/" + str(pol_id)
-                self.logger.debug("About to request PP by ID: %s", url)
+                self.logger.debug("About to request Stable PP by ID: %s", url)
                 ret = requests.get(url, auth=self.auth, cookies=self.cookies)
                 if ret.status_code != 200:
                     raise ProcessorError(
@@ -286,13 +293,13 @@ class Production(Processor):
                 root = ET.fromstring(ret.text)
                 root.find("general/target_version").text = patch_def_software_version
                 root.find("general/release_date").text = ""
-                root.find("user_interaction/deadlines/deadline_period") = deadline
+                root.find("user_interaction/deadlines/deadline_period"
+                    ).text = str(self.pkg.deadline)
                 # create a description with date
                 now = datetime.datetime.now().strftime(" (%Y-%m-%d)")
-                desc = "Update " + self.pkg.package + now
                 root.find(
                     "user_interaction/self_service_description"
-                ).text = desc
+                    ).text =  "Update " + self.pkg.package + now
                 data = ET.tostring(root)
                 self.logger.debug("About to update Stable PP: %s", url)
                 ret = requests.put(url, auth=self.auth, 
@@ -306,7 +313,7 @@ class Production(Processor):
                 pol_id = pol.findtext("id")
                 # now grab that policy
                 url = self.base + "/patchpolicies/id/" + str(pol_id)
-                self.logger.debug("About to request PP by ID: %s", url)
+                self.logger.debug("About to request Test PP by ID: %s URL: %s", str(pol_id), url)
                 ret = requests.get(url, auth=self.auth, cookies=self.cookies)
                 if ret.status_code != 200:
                     raise ProcessorError(
@@ -380,14 +387,16 @@ class Production(Processor):
             del self.env["prod_summary_result"]
         self.pkg.package = self.env.get("package")
         self.pkg.patch = self.env.get("patch")
-        self.logger.debug(f"Starting package {self.pkg.package}")
-        delta = self.env.get("delta")
-        if delta:
-            self.pkg.delta = int(delta)
-            self.logger.debug("Found delta %i", self.pkg.delta)
+        self.pkg.delta = self.env.get("delta")
+        if self.pkg.delta:
+            self.pkg.delta = int(self.pkg.delta)
         else:
-            self.pkg.delta = DEFAULT_DELTA
+            self.pkg.delta = 0
         deadline = self.env.get("deadline")
+        self.logger.debug(f"Starting package {self.pkg.package}")
+        self.logger.debug(f"get. delta: {self.pkg.delta}")
+        if not self.pkg.delta:
+            self.pkg.delta = DEFAULT_DELTA
         if deadline:
             self.pkg.deadline = int(deadline)
             self.logger.debug("Found deadline %i", self.pkg.deadline)

@@ -67,7 +67,7 @@ class JPCImporter(Processor):
         self.logger.addHandler(handler)
 
     def load_prefs(self):
-        """ load the preferences form file """
+        """ load the preferences from file """
         # Which pref format to use, autopkg or jss_importer
         autopkg = True
         if autopkg:
