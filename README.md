@@ -9,9 +9,7 @@ Changes can be summarised:
 
  - Replaced the need for Move.py. All the checking to see if there is a test patch to move into production is now done in the Production processor.
  - There is a new constant in the Production code, `DEFAULT_DELTA` to set the default number of days between test and production.
- - There is a new constant in the Production code, `DEFAULT_DEADLINE` to support a new, soon to be
- released tool. The Production processor sets the Self Service deadline to this value every time it
- updates a "Stable" patch policy.
+ - There is a new constant in the Production code, `DEFAULT_DEADLINE`. The Production processor sets the Self Service deadline to this value every time it updates a "Stable" patch policy.
  - There is a new optional variable in Production `.prod` recipes called `delta` to set the number of days between test and production for that package.
 - There is a new optional variable in Production `.prod` recipes called `deadline` to set the Self
  Service deadline for that package.
