@@ -115,23 +115,23 @@ class Production(Processor):
         try:
             policy_id = policies[name]
         except KeyError:
-            raise ProcessorError(
-                "Test policy key missing: {}".format(name)
-            )
+            raise ProcessorError("Test policy key missing: {}".format(name))
         self.logger.debug(f"Got valid policy id: {policy_id}")
         policy = self.policy(str(policy_id))
         # self.logger.debug(f"back from policy(): {policy}")
-        if policy['general']['enabled'] == False:
+        if policy["general"]["enabled"] == False:
             self.logger.debug("TEST patch policy disabled")
             return False
         else:
-            self.logger.debug(f"['general']['enabled'] :{policy['general']['enabled']}")
+            self.logger.debug(
+                f"['general']['enabled'] :{policy['general']['enabled']}"
+            )
         description = policy["user_interaction"][
-                    "self_service_description"
-                ].split()
+            "self_service_description"
+        ].split()
         # we may have found a patch policy with no proper description yet
         if len(description) != 3:
-            return(False)
+            return False
         title, datestr = description[1:]
 
         date = datetime.datetime.strptime(datestr, "(%Y-%m-%d)")
@@ -143,8 +143,8 @@ class Production(Processor):
         self.logger.debug(f"    PkgDelta   :{self.pkg.delta}")
 
         if delta.days >= self.pkg.delta:
-            return(True)
-        return(False)
+            return True
+        return False
 
     def lookup(self):
         """look up test policy to find package name, id and version """
@@ -182,15 +182,14 @@ class Production(Processor):
         prod = ET.fromstring(ret.text)
         self.logger.debug(f"Prod: {prod}")
         self.logger.debug("Parsed XML from Install policy")
-        prod.find("general/id").text = self.pkg.idn
-        self.logger.debug("Got ID from Install")
-        prod.find("general/name").text = self.pkg.name
-        self.logger.debug("Got name from Install")
+        prod.find(pack_base + "/id").text = self.pkg.idn
+        prod.find(pack_base + "/name").text = self.pkg.name
         data = ET.tostring(prod)
         self.logger.debug("Parsed to XML for Install")
         self.logger.debug("About to put install policy %s", url)
-        ret = requests.put(url, auth=self.auth, 
-            data=data, cookies=self.cookies)
+        ret = requests.put(
+            url, auth=self.auth, data=data, cookies=self.cookies
+        )
         if ret.status_code != 201:
             raise ProcessorError(
                 "Prod policy upload failed: {} : {}".format(
@@ -238,7 +237,9 @@ class Production(Processor):
         done = False
         for record in root.findall("versions/version"):
             if self.pkg.version in record.findtext("software_version"):
-                patch_def_software_version = record.findtext("software_version")
+                patch_def_software_version = record.findtext(
+                    "software_version"
+                )
                 package = record.find("package")
                 add = ET.SubElement(package, "id")
                 add.text = self.pkg.idn
@@ -255,7 +256,9 @@ class Production(Processor):
         # update the patch def
         data = ET.tostring(root)
         self.logger.debug("About to put PST: %s", url)
-        ret = requests.put(url, auth=self.auth, data=data, cookies=self.cookies)
+        ret = requests.put(
+            url, auth=self.auth, data=data, cookies=self.cookies
+        )
         if ret.status_code != 201:
             raise ProcessorError(
                 "Patch definition update failed with code: %s"
@@ -291,19 +294,23 @@ class Production(Processor):
                     )
                 # now edit the patch policy
                 root = ET.fromstring(ret.text)
-                root.find("general/target_version").text = patch_def_software_version
+                root.find(
+                    "general/target_version"
+                ).text = patch_def_software_version
                 root.find("general/release_date").text = ""
-                root.find("user_interaction/deadlines/deadline_period"
-                    ).text = str(self.pkg.deadline)
+                root.find(
+                    "user_interaction/deadlines/deadline_period"
+                ).text = str(self.pkg.deadline)
                 # create a description with date
                 now = datetime.datetime.now().strftime(" (%Y-%m-%d)")
-                root.find(
-                    "user_interaction/self_service_description"
-                    ).text =  "Update " + self.pkg.package + now
+                root.find("user_interaction/self_service_description").text = (
+                    "Update " + self.pkg.package + now
+                )
                 data = ET.tostring(root)
                 self.logger.debug("About to update Stable PP: %s", url)
-                ret = requests.put(url, auth=self.auth, 
-                    data=data, cookies=self.cookies)
+                ret = requests.put(
+                    url, auth=self.auth, data=data, cookies=self.cookies
+                )
                 if ret.status_code != 201:
                     raise ProcessorError(
                         "Stable patch update failed with code: %s"
@@ -313,7 +320,11 @@ class Production(Processor):
                 pol_id = pol.findtext("id")
                 # now grab that policy
                 url = self.base + "/patchpolicies/id/" + str(pol_id)
-                self.logger.debug("About to request Test PP by ID: %s URL: %s", str(pol_id), url)
+                self.logger.debug(
+                    "About to request Test PP by ID: %s URL: %s",
+                    str(pol_id),
+                    url,
+                )
                 ret = requests.get(url, auth=self.auth, cookies=self.cookies)
                 if ret.status_code != 200:
                     raise ProcessorError(
@@ -326,8 +337,9 @@ class Production(Processor):
                 root.find("general/enabled").text = "false"
                 data = ET.tostring(root)
                 self.logger.debug("About to update Test PP: %s", url)
-                ret = requests.put(url, auth=self.auth, 
-                    data=data, cookies=self.cookies)
+                ret = requests.put(
+                    url, auth=self.auth, data=data, cookies=self.cookies
+                )
                 if ret.status_code != 201:
                     raise ProcessorError(
                         "Test patch update failed with code: %s"
@@ -344,23 +356,29 @@ class Production(Processor):
 
         # the front page will give us the cookies
         r = requests.get(self.base)
-        cookie_value = r.cookies.get('APBALANCEID')
+        cookie_value = r.cookies.get("APBALANCEID")
         if cookie_value:
             # we are NOT premium Jamf Cloud
             self.cookies = dict(APBALANCEID=cookie_value)
             c_cookie = "APBALANCEID=%s", cookie_value
             self.logger.debug("APBALANCEID found")
         else:
-            cookie_value = r.cookies['AWSALB']
+            cookie_value = r.cookies["AWSALB"]
             self.cookies = dict(AWSALB=cookie_value)
             c_cookie = "AWSALB=%s", cookie_value
             self.logger.debug("APBALANCEID not found")
 
         url = self.base + "/patchpolicies"
-        ret = requests.get(url, auth=self.auth, headers=self.hdrs, cookies=self.cookies)
-        self.logger.debug("GET policy list url: %s status: %s" % (url, ret.status_code))
+        ret = requests.get(
+            url, auth=self.auth, headers=self.hdrs, cookies=self.cookies
+        )
+        self.logger.debug(
+            "GET policy list url: %s status: %s" % (url, ret.status_code)
+        )
         if ret.status_code != 200:
-            raise ProcessorError("GET failed URL: %s Err: %s" % (url, ret.status_code))
+            raise ProcessorError(
+                "GET failed URL: %s Err: %s" % (url, ret.status_code)
+            )
         # turn the list into a dictionary keyed on the policy name
         d = {}
         for p in ret.json()["patch_policies"]:
@@ -370,10 +388,16 @@ class Production(Processor):
     def policy(self, idn):
         """ get a single patch policy """
         url = self.base + "/patchpolicies/id/" + idn
-        ret = requests.get(url, auth=self.auth, headers=self.hdrs, cookies=self.cookies)
-        self.logger.debug("GET policy url: %s status: %s" % (url, ret.status_code))
+        ret = requests.get(
+            url, auth=self.auth, headers=self.hdrs, cookies=self.cookies
+        )
+        self.logger.debug(
+            "GET policy url: %s status: %s" % (url, ret.status_code)
+        )
         if ret.status_code != 200:
-            raise self.Error("GET failed URL: %s Err: %s" % (url, ret.status_code))
+            raise self.Error(
+                "GET failed URL: %s Err: %s" % (url, ret.status_code)
+            )
         self.logger.debug("About to return from policy")
         return ret.json()["patch_policy"]
 
@@ -408,13 +432,18 @@ class Production(Processor):
             self.logger.debug("Passed delta. Package: %s", self.pkg.package)
             self.lookup()
             self.production()
-            self.logger.debug("Post production self.pkg.patch: %s", self.pkg.patch)
+            self.logger.debug(
+                "Post production self.pkg.patch: %s", self.pkg.patch
+            )
             self.patch()
             self.logger.debug("Done patch")
             self.env["production_summary_result"] = {
                 "summary_text": "The following updates were productionized:",
                 "report_fields": ["package", "version"],
-                "data": {"package": self.pkg.package, "version": self.pkg.version,},
+                "data": {
+                    "package": self.pkg.package,
+                    "version": self.pkg.version,
+                },
             }
             self.logger.debug(
                 "Summary done: %s" % self.env["production_summary_result"]
