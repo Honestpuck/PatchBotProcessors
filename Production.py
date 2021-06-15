@@ -428,6 +428,8 @@ class Production(Processor):
             self.pkg.deadline = DEFAULT_DEADLINE
         if not self.pkg.patch:
             self.pkg.patch = self.pkg.package
+        if self.pkg.patch.lower() is "none":
+            exit 0
         if self.check_delta():
             self.logger.debug("Passed delta. Package: %s", self.pkg.package)
             self.lookup()
