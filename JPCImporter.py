@@ -42,7 +42,7 @@ class JPCImporter(Processor):
         },
     }
     output_variables = {
-        "pkg_path": {"description": "The created package.",},
+        "pkg_path": {"description": "The created package."},
         "jpc_importer_summary_result": {"description": "Summary of action"},
     }
 
@@ -163,8 +163,8 @@ class JPCImporter(Processor):
         while True:
             count += 1
             self.logger.debug("package update attempt %s", count)
-            ret = requests.put(url, auth=auth, headers=hdrs, 
-                data=data, cookies=self.cookies)
+            ret = requests.put(url, auth=auth, headers=hdrs,
+                               data=data, cookies=self.cookies)
             if ret.status_code == 201:
                 break
             self.logger.debug("Attempt failed with code: %s" % ret.status_code)
