@@ -43,10 +43,7 @@ class Package:
 
 
 class Production(Processor):
-    """Moves a package from testing to production by disabling the test
-    policy, changing the production policy to use the new package, and
-    creating a patch policy
-    """
+    """Moves a package from testing to production"""
 
     description = __doc__
 
@@ -54,6 +51,7 @@ class Production(Processor):
         "package": {"required": True, "description": "Package name"},
         "patch": {"required": False, "description": "Patch name"},
         "delta": {"required": False, "description": "Days in test"},
+        "deadline": {"required": False, "description": "Days to deadline"},
     }
 
     output_variables = {
@@ -64,7 +62,7 @@ class Production(Processor):
     pkg = Package()
 
     def load_prefs(self):
-        """ load the preferences from file """
+        """load the preferences from file"""
         # Which pref format to use, autopkg or jss_importer
         autopkg = True
         if autopkg:
@@ -119,7 +117,7 @@ class Production(Processor):
         self.logger.debug(f"Got valid policy id: {policy_id}")
         policy = self.policy(str(policy_id))
         # self.logger.debug(f"back from policy(): {policy}")
-        if policy["general"]["enabled"] == False:
+        if policy["general"]["enabled"] is False:
             self.logger.debug("TEST patch policy disabled")
             return False
         else:
@@ -147,7 +145,7 @@ class Production(Processor):
         return False
 
     def lookup(self):
-        """look up test policy to find package name, id and version """
+        """look up test policy to find package name, id and version"""
         self.logger.debug("Starting")
         url = self.base + "/policies/name/Test-" + self.pkg.package
         pack_base = "package_configuration/packages/package"
@@ -347,26 +345,8 @@ class Production(Processor):
                     )
 
     def policy_list(self):
-        """ get the list of patch policies from JP and turn it into a dictionary """
-
-        # let's use the cookies to make sure we hit the
-        # same server for every request.
-        # the complication here is that ordinary and Premium Jamfers
-        # get two DIFFERENT cookies for this.
-
-        # the front page will give us the cookies
-        r = requests.get(self.base)
-        cookie_value = r.cookies.get("APBALANCEID")
-        if cookie_value:
-            # we are NOT premium Jamf Cloud
-            self.cookies = dict(APBALANCEID=cookie_value)
-            c_cookie = "APBALANCEID=%s", cookie_value
-            self.logger.debug("APBALANCEID found")
-        else:
-            cookie_value = r.cookies["AWSALB"]
-            self.cookies = dict(AWSALB=cookie_value)
-            c_cookie = "AWSALB=%s", cookie_value
-            self.logger.debug("APBALANCEID not found")
+        """get the list of patch policies from JP and
+        turn it into a dictionary"""
 
         url = self.base + "/patchpolicies"
         ret = requests.get(
@@ -386,7 +366,7 @@ class Production(Processor):
         return d
 
     def policy(self, idn):
-        """ get a single patch policy """
+        """get a single patch policy"""
         url = self.base + "/patchpolicies/id/" + idn
         ret = requests.get(
             url, auth=self.auth, headers=self.hdrs, cookies=self.cookies
@@ -415,21 +395,18 @@ class Production(Processor):
         if self.pkg.delta:
             self.pkg.delta = int(self.pkg.delta)
         else:
-            self.pkg.delta = 0
-        deadline = self.env.get("deadline")
-        self.logger.debug(f"Starting package {self.pkg.package}")
-        self.logger.debug(f"get. delta: {self.pkg.delta}")
-        if not self.pkg.delta:
             self.pkg.delta = DEFAULT_DELTA
-        if deadline:
-            self.pkg.deadline = int(deadline)
-            self.logger.debug("Found deadline %i", self.pkg.deadline)
+        self.pkg.deadline = self.env.get("deadline")
+        if self.pkg.deadline:
+            self.pkg.deadline = int(self.pkg.deadline)
         else:
             self.pkg.deadline = DEFAULT_DEADLINE
+        self.logger.debug(f"Starting package {self.pkg.package}")
+        self.logger.debug(f"get. delta: {self.pkg.delta}")
         if not self.pkg.patch:
             self.pkg.patch = self.pkg.package
-        if self.pkg.patch.lower() is "none":
-            exit 0
+        if self.pkg.patch.lower() == "none":
+            exit(0)
         if self.check_delta():
             self.logger.debug("Passed delta. Package: %s", self.pkg.package)
             self.lookup()
