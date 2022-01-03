@@ -43,7 +43,7 @@ class PatchManager(Processor):
     input_variables = {
         "package": {
             "required": True,
-            "description": "App part of package name"
+            "description": "App part of package name",
         },
         "patch": {"required": False, "description": "Patch name"},
     }
@@ -98,27 +98,12 @@ class PatchManager(Processor):
             self.base = server + "/JSSResource/"
             self.auth = (prefs["user"], prefs["password"])
 
-        # let's use the cookies to make sure we hit the
-        # same server for every request.
-        # the complication here is that ordinary and Premium Jamfers
-        # get two DIFFERENT cookies for this.
-
-        # the front page will give us the cookies
-        r = requests.get(server)
-
-        cookie_value = r.cookies.get('APBALANCEID')
-        if cookie_value:
-            # we are NOT premium Jamf Cloud
-            self.cookies = dict(APBALANCEID=cookie_value)
-        else:
-            cookie_value = r.cookies['AWSALB']
-            self.cookies = dict(AWSALB=cookie_value)
         policy_name = "TEST-{}".format(self.pkg.package)
         url = self.base + "policies/name/{}".format(policy_name)
         self.logger.debug(
             "About to make request URL %s, auth %s" % (url, self.auth)
         )
-        ret = requests.get(url, auth=self.auth, cookies=self.cookies)
+        ret = requests.get(url, auth=self.auth)
         if ret.status_code != 200:
             self.logger.debug(
                 "TEST Policy %s not found error: %s"
@@ -136,14 +121,14 @@ class PatchManager(Processor):
             ).text
         except AttributeError:
             self.logger.debug(
-                f"Missing package definition in policy: {policy_name}")
+                f"Missing package definition in policy: {policy_name}"
+            )
             raise ProcessorError("Missing package definition")
         self.pkg.name = root.find(
             "package_configuration/packages/package/name"
         ).text
         self.logger.debug(
-            "Version in TEST Policy %s " %
-            self.pkg.name.split("-", 1)[1][:-4]
+            "Version in TEST Policy %s " % self.pkg.name.split("-", 1)[1][:-4]
         )
         # return the version number
         return self.pkg.name.split("-", 1)[1][:-4]
@@ -153,7 +138,7 @@ class PatchManager(Processor):
         # download the list of titles
         url = self.base + "patchsoftwaretitles"
         self.logger.debug("About to request PST list %s", url)
-        ret = requests.get(url, auth=self.auth, cookies=self.cookies)
+        ret = requests.get(url, auth=self.auth)
         if ret.status_code != 200:
             raise ProcessorError(
                 "Patch list download failed: {} : {}".format(
@@ -176,7 +161,7 @@ class PatchManager(Processor):
         # get the patch list for our title
         url = self.base + "patchsoftwaretitles/id/" + str(ident)
         self.logger.debug("About to request PST by ID: %s" % url)
-        ret = requests.get(url, auth=self.auth, cookies=self.cookies)
+        ret = requests.get(url, auth=self.auth)
         if ret.status_code != 200:
             raise ProcessorError(
                 "Patch software download failed: {} : {}".format(
@@ -213,8 +198,7 @@ class PatchManager(Processor):
         # update the patch def
         data = ET.tostring(root)
         self.logger.debug("About to put PST: %s" % url)
-        ret = requests.put(url, auth=self.auth,
-                data=data, cookies=self.cookies)
+        ret = requests.put(url, auth=self.auth, data=data)
         if ret.status_code != 201:
             raise ProcessorError(
                 "Patch definition update failed with code: %s"
@@ -225,7 +209,7 @@ class PatchManager(Processor):
         # first get the list of patch policies for our software title
         url = f"{self.base}patchpolicies/softwaretitleconfig/id/{str(ident)}"
         self.logger.debug("About to request patch list: %s" % url)
-        ret = requests.get(url, auth=self.auth, cookies=self.cookies)
+        ret = requests.get(url, auth=self.auth)
         if ret.status_code != 200:
             raise ProcessorError(
                 "Patch policy list download failed: {} : {}".format(
@@ -245,7 +229,7 @@ class PatchManager(Processor):
                 pol_id = pol.findtext("id")
                 url = self.base + "patchpolicies/id/" + str(pol_id)
                 self.logger.debug("About to request PP by ID: %s" % url)
-                ret = requests.get(url, auth=self.auth, cookies=self.cookies)
+                ret = requests.get(url, auth=self.auth)
                 if ret.status_code != 200:
                     raise ProcessorError(
                         "Patch policy download failed: {} : {}".format(
@@ -261,8 +245,7 @@ class PatchManager(Processor):
                         self.pkg.version,
                     )
                 )
-                if root.findtext("general/target_version") == 
-                        self.pkg.version:
+                if root.findtext("general/target_version") == self.pkg.version:
                     # we have already done this version
                     self.logger.debug(
                         "Version %s already done" % self.pkg.version
@@ -279,8 +262,7 @@ class PatchManager(Processor):
                 ).text = desc
                 data = ET.tostring(root)
                 self.logger.debug("About to change PP: %s" % url)
-                ret = requests.put(url, auth=self.auth, 
-                    data=data, cookies=self.cookies)
+                ret = requests.put(url, auth=self.auth, data=data)
                 if ret.status_code != 201:
                     self.logger.debug(ret.text)
                     self.logger.debug(data)
