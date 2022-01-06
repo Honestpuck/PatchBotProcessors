@@ -26,6 +26,9 @@ from autopkglib import Processor, ProcessorError
 APPNAME = "JPCImporter"
 LOGLEVEL = logging.DEBUG
 LOGFILE = "/usr/local/var/log/%s.log" % APPNAME
+# This category MUST exist on your JAMF Pro server
+# If it doesn't you will get 409 errors on the package update
+CATEGORY = "Applications"
 
 __all__ = [APPNAME]
 
@@ -130,7 +133,7 @@ class JPCImporter(Processor):
         # build the package record XML
         today = datetime.datetime.now().strftime("(%Y-%m-%d)")
         data = "<package><id>{}</id>".format(packid)
-        data += "<category>Applications</category>"
+        data += f"<category>{CATEGORY}</category>"
         data += "<notes>Built by Autopkg. {}</notes></package>".format(today)
 
         # we use requests for all the other API calls as it codes nicer
@@ -147,6 +150,14 @@ class JPCImporter(Processor):
             ret = requests.put(url, auth=auth, headers=hdrs, data=data)
             if ret.status_code == 201:
                 break
+            if ret.status_code == 409:
+                self.logger.warning(
+                    "409 error: Are you sure category %s exists?", CATEGORY
+                )
+                raise ProcessorError(
+                    "409 error on pkg update: Does category %s exists?",
+                    CATEGORY,
+                )
             self.logger.debug("Attempt failed with code: %s" % ret.status_code)
             self.logger.debug("URL: %s" % url)
             if count > 10:
