@@ -98,6 +98,28 @@ class JPCImporter(Processor):
         pkg = path.basename(pkg_path)
         title = pkg.split("-")[0]
 
+        # let's use the cookies to make sure we hit the
+        # same server all the way through our curl
+        # the complication here is that ordinary and Premium Jamfers
+        # get two DIFFERENT cookies for this while on-prem probably gets none
+
+        # the front page will give us the cookies
+        r = requests.get(server)
+
+        cookie_value = r.cookies.get("APBALANCEID")
+        if cookie_value:
+            # we are NOT premium Jamf Cloud
+            self.cookies = dict(APBALANCEID=cookie_value)
+            c_cookie = "APBALANCEID={}".format(cookie_value)
+        else:
+            cookie_value = r.cookies["AWSALB"]
+            if cookie_value:
+                # we are premium Jamf Cloud
+                self.cookies = dict(AWSALB=cookie_value)
+                c_cookie = "AWSALB={}".format(cookie_value)
+            else:
+                self.cookies = False
+                c_cookie = False
         # check to see if the package already exists
         url = base + "packages/name/{}".format(pkg)
         self.logger.debug("About to get: %s", url)
@@ -111,6 +133,8 @@ class JPCImporter(Processor):
         curl_auth = "%s:%s" % auth
         curl_url = server + "/dbfileupload"
         command = ["curl", "-u", curl_auth, "-s", "-X", "POST", curl_url]
+        if c_cookie:
+            command += ["-b", c_cookie]
         command += ["--header", "DESTINATION: 0"]
         command += ["--header", "OBJECT_ID: -1"]
         command += ["--header", "FILE_TYPE: 0"]
