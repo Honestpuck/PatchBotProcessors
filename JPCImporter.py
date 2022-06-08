@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# JPCImporter v2.1
+# JPCImporter v4.0b
 #
 # Tony Williams 2019-07-03
 #
@@ -8,6 +8,10 @@
 # ARW 2020-03-12 Version 2 with changes for new workflow
 # ARW 2020-06-09 Some changes to log levels and cleaning up code
 # ARW 2020-06-24 Final tidy before publication
+
+# v4
+# ARW 2022-01-09 Modernise and clean the code (f strings)
+# ARW 2022-01-10 Add cookie code back but support on-premise
 
 """See docstring for JPCImporter class"""
 
@@ -156,9 +160,9 @@ class JPCImporter(Processor):
 
         # build the package record XML
         today = datetime.datetime.now().strftime("(%Y-%m-%d)")
-        data = "<package><id>{}</id>".format(packid)
+        data = f"<package><id>{packid}</id>"
         data += f"<category>{CATEGORY}</category>"
-        data += "<notes>Built by Autopkg. {}</notes></package>".format(today)
+        data += f"<notes>Built by Autopkg. {today}</notes></package>"
 
         # we use requests for all the other API calls as it codes nicer
         # update the package details
@@ -170,33 +174,32 @@ class JPCImporter(Processor):
         count = 0
         while True:
             count += 1
-            self.logger.debug("package update attempt %s", count)
+            self.logger.debug(f"package update attempt {count}")
             ret = requests.put(url, auth=auth, headers=hdrs, data=data)
             if ret.status_code == 201:
                 break
             if ret.status_code == 409:
                 self.logger.warning(
-                    "409 error: Are you sure category %s exists?", CATEGORY
+                    f"409 error: Are you sure category {CATEGORY} exists?"
                 )
                 raise ProcessorError(
-                    "409 error on pkg update: Does category %s exists?",
-                    CATEGORY,
+                    f"409 error on pkg update: Does category {CATEGORY} exist?"
                 )
-            self.logger.debug("Attempt failed with code: %s" % ret.status_code)
-            self.logger.debug("URL: %s" % url)
+            self.logger.debug(f"Attempt failed with code: {ret.status_code}")
+            self.logger.debug(f"URL: {url}")
             if count > 10:
                 raise ProcessorError(
-                    "Package update failed with code: %s" % ret.status_code
+                    f"Package update failed with code: {ret.status_code}"
                 )
             sleep(20)
 
         # now for the test policy update
-        policy_name = "TEST-{}".format(title)
-        url = base + "policies/name/{}".format(policy_name)
+        policy_name = f"TEST-{title}"
+        url = base + f"policies/name/{policy_name}"
         ret = requests.get(url, auth=auth)
         if ret.status_code != 200:
             raise ProcessorError(
-                "Test Policy %s not found: %s" % (url, ret.status_code)
+                "Test Policy {url} not found: {ret.status_code}"
             )
         self.logger.warning("Test policy found")
         root = ET.fromstring(ret.text)
@@ -206,12 +209,12 @@ class JPCImporter(Processor):
         )
         root.find("general/enabled").text = "false"
         root.find("package_configuration/packages/package/name").text = pkg
-        url = base + "policies/id/{}".format(root.findtext("general/id"))
+        url = base + f"policies/id/{root.findtext('general/id')}"
         data = ET.tostring(root)
         ret = requests.put(url, auth=auth, data=data)
         if ret.status_code != 201:
             raise ProcessorError(
-                "Test policy %s update failed: %s" % (url, ret.status_code)
+                f"Test policy {url} update failed: {ret.status_code}"
             )
         pol_id = ET.fromstring(ret.text).findtext("id")
         self.logger.debug("got pol_id: %s", pol_id)
